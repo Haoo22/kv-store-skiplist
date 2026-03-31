@@ -2,6 +2,8 @@
 
 #include <memory>
 #include <string>
+#include <utility>
+#include <vector>
 
 namespace kvstore {
 
@@ -18,6 +20,13 @@ public:
     KVStore& operator=(const KVStore&) = delete;
     KVStore(KVStore&&) noexcept = default;
     KVStore& operator=(KVStore&&) noexcept = default;
+
+    bool Put(const std::string& key, const std::string& value);
+    bool Get(const std::string& key, std::string* value) const;
+    bool Delete(const std::string& key);
+    std::vector<std::pair<std::string, std::string>> Scan(
+        const std::string& start,
+        const std::string& end) const;
 
     const EngineOptions& options() const noexcept;
 
