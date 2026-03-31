@@ -90,6 +90,19 @@ set_target_properties(kvstore_bench PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/bin
 )
 
+add_executable(kvstore_compare_bench
+    src/compare_benchmark_main.cpp
+)
+
+target_link_libraries(kvstore_compare_bench
+    PRIVATE
+        kvstore_core
+)
+
+set_target_properties(kvstore_compare_bench PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/bin
+)
+
 if(KVSTORE_BUILD_TESTS)
     enable_testing()
 

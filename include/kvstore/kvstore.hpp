@@ -1,6 +1,7 @@
 #pragma once
 
 #include <memory>
+#include <mutex>
 #include <string>
 #include <utility>
 #include <vector>
@@ -9,6 +10,7 @@ namespace kvstore {
 
 struct EngineOptions {
     std::string wal_path {"data/wal.log"};
+    bool enable_wal {true};
 };
 
 class KVStore {
@@ -34,6 +36,7 @@ private:
     class Impl;
 
     EngineOptions options_;
+    mutable std::mutex mutex_;
     std::unique_ptr<Impl> impl_;
 };
 
