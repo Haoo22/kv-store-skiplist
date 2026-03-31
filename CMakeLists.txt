@@ -62,6 +62,34 @@ set_target_properties(kvstore_server PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/bin
 )
 
+add_executable(kvstore_client
+    src/client_main.cpp
+)
+
+target_link_libraries(kvstore_client
+    PRIVATE
+        kvstore_compile_options
+        Threads::Threads
+)
+
+set_target_properties(kvstore_client PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/bin
+)
+
+add_executable(kvstore_bench
+    src/benchmark_main.cpp
+)
+
+target_link_libraries(kvstore_bench
+    PRIVATE
+        kvstore_compile_options
+        Threads::Threads
+)
+
+set_target_properties(kvstore_bench PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/bin
+)
+
 if(KVSTORE_BUILD_TESTS)
     enable_testing()
 
