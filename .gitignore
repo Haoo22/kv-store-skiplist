@@ -1,0 +1,12 @@
+/build/
+/compile_commands.json
+
+/bin/*
+!/bin/.gitkeep
+
+*.o
+*.obj
+*.a
+*.so
+*.so.*
+*.out
