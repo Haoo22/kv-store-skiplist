@@ -1,7 +1,6 @@
 #pragma once
 
 #include <memory>
-#include <mutex>
 #include <string>
 #include <utility>
 #include <vector>
@@ -36,7 +35,6 @@ private:
     class Impl;
 
     EngineOptions options_;
-    mutable std::mutex mutex_;
     std::unique_ptr<Impl> impl_;
 };
 

@@ -299,10 +299,12 @@ WAL& WAL::operator=(WAL&& other) noexcept {
 }
 
 void WAL::AppendPut(const std::string& key, const std::string& value) {
+    std::lock_guard<std::mutex> lock(append_mutex_);
     impl_->Append(LogRecord {RecordType::kPut, key, value});
 }
 
 void WAL::AppendDelete(const std::string& key) {
+    std::lock_guard<std::mutex> lock(append_mutex_);
     impl_->Append(LogRecord {RecordType::kDelete, key, ""});
 }
 

@@ -6,6 +6,7 @@
 #include <memory>
 #include <mutex>
 #include <random>
+#include <shared_mutex>
 #include <utility>
 #include <vector>
 
@@ -34,7 +35,7 @@ public:
     SkipList& operator=(SkipList&&) = delete;
 
     bool Put(const Key& key, const Value& value) {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::unique_lock<std::shared_timed_mutex> lock(mutex_);
         std::vector<std::shared_ptr<Node>> update(max_level_, head_);
         auto current = FindPredecessors(key, update);
 
@@ -62,7 +63,7 @@ public:
     }
 
     bool Get(const Key& key, Value* value) const {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::shared_lock<std::shared_timed_mutex> lock(mutex_);
         auto current = FindNode(key);
         if (current == nullptr) {
             return false;
@@ -75,7 +76,7 @@ public:
     }
 
     bool Delete(const Key& key) {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::unique_lock<std::shared_timed_mutex> lock(mutex_);
         std::vector<std::shared_ptr<Node>> update(max_level_, head_);
         auto current = FindPredecessors(key, update);
 
@@ -99,7 +100,7 @@ public:
     }
 
     std::vector<value_type> Scan(const Key& start, const Key& end) const {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::shared_lock<std::shared_timed_mutex> lock(mutex_);
         std::vector<value_type> result;
 
         if (compare_(end, start)) {
@@ -124,7 +125,7 @@ public:
     }
 
     std::size_t Size() const noexcept {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::shared_lock<std::shared_timed_mutex> lock(mutex_);
         return size_;
     }
 
@@ -133,7 +134,7 @@ public:
     }
 
     void Clear() {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::unique_lock<std::shared_timed_mutex> lock(mutex_);
         for (std::size_t level = 0; level < max_level_; ++level) {
             head_->forward[level].reset();
         }
@@ -142,7 +143,7 @@ public:
     }
 
     std::size_t CurrentLevel() const noexcept {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::shared_lock<std::shared_timed_mutex> lock(mutex_);
         return current_level_;
     }
 
@@ -196,7 +197,7 @@ private:
     const std::size_t max_level_;
     const double probability_;
 
-    mutable std::mutex mutex_;
+    mutable std::shared_timed_mutex mutex_;
     std::size_t current_level_;
     std::size_t size_;
     Compare compare_;

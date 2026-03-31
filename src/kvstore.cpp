@@ -37,7 +37,6 @@ KVStore::KVStore(EngineOptions options)
 KVStore::~KVStore() = default;
 
 bool KVStore::Put(const std::string& key, const std::string& value) {
-    std::lock_guard<std::mutex> lock(mutex_);
     if (impl_->wal_enabled) {
         impl_->wal.AppendPut(key, value);
     }
@@ -45,12 +44,10 @@ bool KVStore::Put(const std::string& key, const std::string& value) {
 }
 
 bool KVStore::Get(const std::string& key, std::string* value) const {
-    std::lock_guard<std::mutex> lock(mutex_);
     return impl_->index.Get(key, value);
 }
 
 bool KVStore::Delete(const std::string& key) {
-    std::lock_guard<std::mutex> lock(mutex_);
     if (impl_->wal_enabled) {
         impl_->wal.AppendDelete(key);
     }
@@ -60,7 +57,6 @@ bool KVStore::Delete(const std::string& key) {
 std::vector<std::pair<std::string, std::string>> KVStore::Scan(
     const std::string& start,
     const std::string& end) const {
-    std::lock_guard<std::mutex> lock(mutex_);
     return impl_->index.Scan(start, end);
 }
 

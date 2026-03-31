@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <mutex>
 #include <string>
 
 namespace kvstore {
@@ -46,6 +47,7 @@ private:
     class Impl;
 
     std::string file_path_;
+    mutable std::mutex append_mutex_;
     std::unique_ptr<Impl> impl_;
 };
 
