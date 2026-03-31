@@ -1,4 +1,5 @@
 #include "kvstore/kvstore.hpp"
+#include "kvstore/Protocol.hpp"
 #include "kvstore/SkipList.hpp"
 #include "kvstore/WAL.hpp"
 
@@ -129,9 +130,43 @@ int main() {
         Ensure(engine_value == "value-2", "replayed key-2 value");
     }
 
+    {
+        kvstore::EngineOptions protocol_options;
+        protocol_options.wal_path = MakeWalPath("protocol.log");
+        RemoveFileIfExists(protocol_options.wal_path);
+        kvstore::KVStore protocol_store(protocol_options);
+        kvstore::CommandProcessor processor(protocol_store);
+        kvstore::LineCodec codec;
+
+        static const char kChunk1[] = "PUT user alice\r\nGET ";
+        codec.Append(kChunk1, sizeof(kChunk1) - 1);
+        const auto first_lines = codec.ExtractLines();
+        Ensure(first_lines.size() == 1, "codec should extract one complete line");
+        Ensure(first_lines[0] == "PUT user alice", "codec first line content");
+        Ensure(codec.buffer() == "GET ", "codec should retain partial command");
+
+        static const char kChunk2[] = "user\r\nSCAN a z\r\nDEL user\r\nQUIT\r\n";
+        codec.Append(kChunk2, sizeof(kChunk2) - 1);
+        const auto second_lines = codec.ExtractLines();
+        Ensure(second_lines.size() == 4, "codec should extract remaining lines");
+
+        Ensure(processor.Execute(first_lines[0]) == "OK PUT\r\n", "protocol PUT response");
+        Ensure(processor.Execute(second_lines[0]) == "VALUE alice\r\n", "protocol GET response");
+        Ensure(processor.Execute(second_lines[1]) == "RESULT 1 user=alice\r\n",
+               "protocol SCAN response");
+        Ensure(processor.Execute(second_lines[2]) == "OK DELETE\r\n", "protocol DEL response");
+        Ensure(processor.Execute(second_lines[3]) == "BYE\r\n", "protocol QUIT response");
+        Ensure(processor.Execute("PING") == "PONG\r\n", "protocol PING response");
+        Ensure(processor.Execute("GET missing") == "NOT_FOUND\r\n", "protocol missing GET");
+        Ensure(processor.Execute("NOOP") == "ERROR unknown command\r\n",
+               "protocol unknown command");
+
+        RemoveFileIfExists(protocol_options.wal_path);
+    }
+
     RemoveFileIfExists(options.wal_path);
     RemoveFileIfExists(wal_path);
 
-    std::cout << "kvstore WAL and skip list tests passed\n";
+    std::cout << "kvstore WAL, protocol and skip list tests passed\n";
     return 0;
 }

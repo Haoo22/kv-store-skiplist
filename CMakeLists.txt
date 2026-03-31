@@ -32,6 +32,8 @@ target_compile_options(kvstore_compile_options INTERFACE
 find_package(Threads REQUIRED)
 
 add_library(kvstore_core STATIC
+    src/Protocol.cpp
+    src/Server.cpp
     src/WAL.cpp
     src/kvstore.cpp
 )
