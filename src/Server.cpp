@@ -16,6 +16,7 @@
 #include <arpa/inet.h>
 #include <fcntl.h>
 #include <netinet/in.h>
+#include <netinet/tcp.h>
 #include <sys/epoll.h>
 #include <sys/socket.h>
 #include <unistd.h>
@@ -81,6 +82,13 @@ void SetReuseAddr(int fd) {
     int option = 1;
     if (::setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &option, sizeof(option)) < 0) {
         throw MakeErrno("setsockopt(SO_REUSEADDR) failed");
+    }
+}
+
+void SetTcpNoDelay(int fd) {
+    int option = 1;
+    if (::setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &option, sizeof(option)) < 0) {
+        throw MakeErrno("setsockopt(TCP_NODELAY) failed");
     }
 }
 
@@ -166,6 +174,7 @@ private:
         FileDescriptor fd;
         LineCodec codec;
         std::string write_buffer;
+        std::uint32_t interest_events {EPOLLIN | EPOLLRDHUP};
         bool close_after_write {false};
     };
 
@@ -246,6 +255,7 @@ private:
 
             try {
                 SetNonBlocking(client_fd);
+                SetTcpNoDelay(client_fd);
                 epoll_event event {};
                 event.events = EPOLLIN | EPOLLRDHUP;
                 event.data.fd = client_fd;
@@ -317,9 +327,7 @@ private:
         }
 
         if (!iterator->second.write_buffer.empty()) {
-            UpdateInterest(epoll_fd_.Get(),
-                           iterator->second.fd.Get(),
-                           EPOLLIN | EPOLLOUT | EPOLLRDHUP);
+            return WriteToConnection(iterator);
         }
         return true;
     }
@@ -331,6 +339,7 @@ private:
                                           iterator->second.write_buffer.size());
             if (bytes < 0) {
                 if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                    SetConnectionInterest(iterator, EPOLLIN | EPOLLOUT | EPOLLRDHUP);
                     return true;
                 }
                 if (errno == EINTR) {
@@ -349,8 +358,17 @@ private:
             return false;
         }
 
-        UpdateInterest(epoll_fd_.Get(), iterator->second.fd.Get(), EPOLLIN | EPOLLRDHUP);
+        SetConnectionInterest(iterator, EPOLLIN | EPOLLRDHUP);
         return true;
+    }
+
+    void SetConnectionInterest(std::unordered_map<int, Connection>::iterator iterator,
+                               std::uint32_t events) {
+        if (iterator->second.interest_events == events) {
+            return;
+        }
+        UpdateInterest(epoll_fd_.Get(), iterator->second.fd.Get(), events);
+        iterator->second.interest_events = events;
     }
 
     void CloseConnection(std::unordered_map<int, Connection>::iterator iterator) {

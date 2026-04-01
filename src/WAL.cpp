@@ -1,10 +1,12 @@
 #include "kvstore/WAL.hpp"
 
 #include <cerrno>
+#include <chrono>
 #include <cstdint>
 #include <cstring>
 #include <stdexcept>
 #include <string>
+#include <thread>
 #include <utility>
 #include <vector>
 
@@ -195,7 +197,6 @@ public:
         if (!record.value.empty()) {
             WriteAll(fd_.Get(), record.value.data(), record.value.size());
         }
-        Sync();
     }
 
     ReplayStats Replay(const std::string& file_path,
@@ -282,30 +283,29 @@ private:
     FileDescriptor fd_;
 };
 
-WAL::WAL(std::string file_path)
-    : file_path_(std::move(file_path)), impl_(new Impl(file_path_)) {}
+WAL::WAL(std::string file_path, int sync_interval_ms)
+    : file_path_(std::move(file_path)),
+      sync_interval_ms_(sync_interval_ms < 0 ? 0 : sync_interval_ms),
+      impl_(new Impl(file_path_)) {
+    StartSyncThread();
+}
 
-WAL::~WAL() = default;
-
-WAL::WAL(WAL&& other) noexcept
-    : file_path_(std::move(other.file_path_)), impl_(std::move(other.impl_)) {}
-
-WAL& WAL::operator=(WAL&& other) noexcept {
-    if (this != &other) {
-        file_path_ = std::move(other.file_path_);
-        impl_ = std::move(other.impl_);
-    }
-    return *this;
+WAL::~WAL() {
+    StopSyncThread();
+    std::lock_guard<std::mutex> lock(append_mutex_);
+    impl_->Sync();
 }
 
 void WAL::AppendPut(const std::string& key, const std::string& value) {
     std::lock_guard<std::mutex> lock(append_mutex_);
     impl_->Append(LogRecord {RecordType::kPut, key, value});
+    MarkDirty();
 }
 
 void WAL::AppendDelete(const std::string& key) {
     std::lock_guard<std::mutex> lock(append_mutex_);
     impl_->Append(LogRecord {RecordType::kDelete, key, ""});
+    MarkDirty();
 }
 
 ReplayStats WAL::Replay(const std::function<void(const LogRecord&)>& apply) const {
@@ -318,6 +318,70 @@ void WAL::Sync() {
 
 const std::string& WAL::path() const noexcept {
     return file_path_;
+}
+
+void WAL::StartSyncThread() {
+    if (sync_interval_ms_ == 0) {
+        return;
+    }
+
+    sync_thread_ = std::thread([this]() {
+        SyncLoop();
+    });
+}
+
+void WAL::StopSyncThread() {
+    if (!sync_thread_.joinable()) {
+        return;
+    }
+
+    {
+        std::lock_guard<std::mutex> lock(sync_mutex_);
+        stop_sync_ = true;
+    }
+    sync_cv_.notify_one();
+    sync_thread_.join();
+}
+
+void WAL::MarkDirty() {
+    if (sync_interval_ms_ == 0) {
+        impl_->Sync();
+        return;
+    }
+
+    std::lock_guard<std::mutex> lock(sync_mutex_);
+    dirty_ = true;
+}
+
+void WAL::SyncLoop() {
+    const auto interval = std::chrono::milliseconds(sync_interval_ms_);
+
+    while (true) {
+        {
+            std::unique_lock<std::mutex> lock(sync_mutex_);
+            sync_cv_.wait_for(lock, interval, [this]() {
+                return stop_sync_;
+            });
+        }
+
+        bool should_stop = false;
+        bool should_sync = false;
+        {
+            std::lock_guard<std::mutex> lock(sync_mutex_);
+            should_stop = stop_sync_;
+            should_sync = dirty_;
+            dirty_ = false;
+        }
+
+        if (should_sync) {
+            std::lock_guard<std::mutex> lock(append_mutex_);
+            impl_->Sync();
+        }
+
+        if (should_stop) {
+            return;
+        }
+    }
 }
 
 }  // namespace kvstore

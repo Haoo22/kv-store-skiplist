@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <cstddef>
 #include <functional>
 #include <limits>
@@ -25,7 +26,7 @@ public:
           current_level_(1),
           size_(0),
           compare_(std::move(compare)),
-          head_(std::make_shared<Node>(max_level_, Key{}, Value{})),
+          head_(std::make_unique<Node>(max_level_, Key{}, Value{})),
           random_engine_(std::random_device{}()),
           level_distribution_(probability_) {}
 
@@ -36,7 +37,7 @@ public:
 
     bool Put(const Key& key, const Value& value) {
         std::unique_lock<std::shared_timed_mutex> lock(mutex_);
-        std::vector<std::shared_ptr<Node>> update(max_level_, head_);
+        std::vector<Node*> update(max_level_, head_.get());
         auto current = FindPredecessors(key, update);
 
         if (current != nullptr && KeysEqual(current->key, key)) {
@@ -47,15 +48,24 @@ public:
         const std::size_t node_level = RandomLevel();
         if (node_level > current_level_) {
             for (std::size_t level = current_level_; level < node_level; ++level) {
-                update[level] = head_;
+                update[level] = head_.get();
             }
             current_level_ = node_level;
         }
 
-        auto new_node = std::make_shared<Node>(node_level, key, value);
+        std::unique_ptr<Node> new_node = std::make_unique<Node>(node_level, key, value);
+        Node* new_node_ptr = new_node.get();
         for (std::size_t level = 0; level < node_level; ++level) {
-            new_node->forward[level] = update[level]->forward[level];
-            update[level]->forward[level] = new_node;
+            if (level == 0) {
+                new_node->next = std::move(update[level]->next);
+                new_node_ptr->forward[level] = new_node->next.get();
+                update[level]->next = std::move(new_node);
+                update[level]->forward[level] = update[level]->next.get();
+                continue;
+            }
+
+            new_node_ptr->forward[level] = update[level]->forward[level];
+            update[level]->forward[level] = new_node_ptr;
         }
 
         ++size_;
@@ -77,7 +87,7 @@ public:
 
     bool Delete(const Key& key) {
         std::unique_lock<std::shared_timed_mutex> lock(mutex_);
-        std::vector<std::shared_ptr<Node>> update(max_level_, head_);
+        std::vector<Node*> update(max_level_, head_.get());
         auto current = FindPredecessors(key, update);
 
         if (current == nullptr || !KeysEqual(current->key, key)) {
@@ -90,6 +100,10 @@ public:
             }
             update[level]->forward[level] = current->forward[level];
         }
+
+        std::unique_ptr<Node> removed = std::move(update[0]->next);
+        update[0]->next = std::move(removed->next);
+        update[0]->forward[0] = update[0]->next.get();
 
         while (current_level_ > 1 && head_->forward[current_level_ - 1] == nullptr) {
             --current_level_;
@@ -107,7 +121,7 @@ public:
             return result;
         }
 
-        auto current = head_;
+        Node* current = head_.get();
         for (std::size_t level = current_level_; level > 0; --level) {
             while (current->forward[level - 1] != nullptr &&
                    compare_(current->forward[level - 1]->key, start)) {
@@ -135,8 +149,9 @@ public:
 
     void Clear() {
         std::unique_lock<std::shared_timed_mutex> lock(mutex_);
+        head_->next.reset();
         for (std::size_t level = 0; level < max_level_; ++level) {
-            head_->forward[level].reset();
+            head_->forward[level] = nullptr;
         }
         current_level_ = 1;
         size_ = 0;
@@ -156,17 +171,16 @@ private:
 
         Key key;
         Value value;
-        std::vector<std::shared_ptr<Node>> forward;
+        std::unique_ptr<Node> next;
+        std::vector<Node*> forward;
     };
 
     bool KeysEqual(const Key& lhs, const Key& rhs) const {
         return !compare_(lhs, rhs) && !compare_(rhs, lhs);
     }
 
-    std::shared_ptr<Node> FindPredecessors(
-        const Key& key,
-        std::vector<std::shared_ptr<Node>>& update) const {
-        auto current = head_;
+    Node* FindPredecessors(const Key& key, std::vector<Node*>& update) const {
+        Node* current = head_.get();
         for (std::size_t level = current_level_; level > 0; --level) {
             while (current->forward[level - 1] != nullptr &&
                    compare_(current->forward[level - 1]->key, key)) {
@@ -177,8 +191,8 @@ private:
         return current->forward[0];
     }
 
-    std::shared_ptr<Node> FindNode(const Key& key) const {
-        std::vector<std::shared_ptr<Node>> update(max_level_, head_);
+    Node* FindNode(const Key& key) const {
+        std::vector<Node*> update(max_level_, head_.get());
         auto current = FindPredecessors(key, update);
         if (current != nullptr && KeysEqual(current->key, key)) {
             return current;
@@ -201,7 +215,7 @@ private:
     std::size_t current_level_;
     std::size_t size_;
     Compare compare_;
-    std::shared_ptr<Node> head_;
+    std::unique_ptr<Node> head_;
     mutable std::mt19937 random_engine_;
     mutable std::bernoulli_distribution level_distribution_;
 };

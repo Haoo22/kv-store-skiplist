@@ -10,6 +10,7 @@ namespace kvstore {
 struct EngineOptions {
     std::string wal_path {"data/wal.log"};
     bool enable_wal {true};
+    int wal_sync_interval_ms {0};
 };
 
 class KVStore {

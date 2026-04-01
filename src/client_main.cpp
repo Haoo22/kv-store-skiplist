@@ -7,6 +7,7 @@
 
 #include <arpa/inet.h>
 #include <netinet/in.h>
+#include <netinet/tcp.h>
 #include <sys/socket.h>
 #include <unistd.h>
 
@@ -70,6 +71,12 @@ SocketHandle Connect(const std::string& host, std::uint16_t port) {
         throw MakeErrno("connect failed");
     }
 
+    int option = 1;
+    if (::setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &option, sizeof(option)) < 0) {
+        ::close(fd);
+        throw MakeErrno("setsockopt(TCP_NODELAY) failed");
+    }
+
     return SocketHandle(fd);
 }
 
@@ -89,29 +96,36 @@ void WriteAll(int fd, const std::string& payload) {
     }
 }
 
-std::string ReadLine(int fd) {
-    std::string buffer;
-    char ch = '\0';
-
-    while (true) {
-        const ssize_t bytes = ::read(fd, &ch, 1);
-        if (bytes < 0) {
-            if (errno == EINTR) {
-                continue;
+class LineReader {
+public:
+    std::string ReadLine(int fd) {
+        while (true) {
+            const std::string::size_type pos = buffer_.find("\r\n");
+            if (pos != std::string::npos) {
+                std::string line = buffer_.substr(0, pos + 2);
+                buffer_.erase(0, pos + 2);
+                return line;
             }
-            throw MakeErrno("read failed");
-        }
-        if (bytes == 0) {
-            throw std::runtime_error("server closed connection");
-        }
 
-        buffer.push_back(ch);
-        const std::size_t size = buffer.size();
-        if (size >= 2 && buffer[size - 2] == '\r' && buffer[size - 1] == '\n') {
-            return buffer;
+            char chunk[4096];
+            const ssize_t bytes = ::read(fd, chunk, sizeof(chunk));
+            if (bytes < 0) {
+                if (errno == EINTR) {
+                    continue;
+                }
+                throw MakeErrno("read failed");
+            }
+            if (bytes == 0) {
+                throw std::runtime_error("server closed connection");
+            }
+
+            buffer_.append(chunk, static_cast<std::size_t>(bytes));
         }
     }
-}
+
+private:
+    std::string buffer_;
+};
 
 }  // namespace
 
@@ -121,6 +135,7 @@ int main(int argc, char** argv) {
 
     try {
         SocketHandle socket = Connect(host, port);
+        LineReader reader;
         std::cout << "Connected to " << host << ':' << port << '\n';
         std::cout << "Type commands like PUT key value, GET key, SCAN a z, DEL key, QUIT\n";
 
@@ -131,7 +146,7 @@ int main(int argc, char** argv) {
             }
 
             WriteAll(socket.get(), line + "\r\n");
-            const std::string response = ReadLine(socket.get());
+            const std::string response = reader.ReadLine(socket.get());
             std::cout << response;
             if (line == "QUIT" || line == "quit" || line == "Quit") {
                 break;

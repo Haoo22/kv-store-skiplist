@@ -172,6 +172,7 @@ GET      ops=1000 elapsed=0.0561s throughput=17825.31 ops/s avg_latency=56.10 us
 ```bash
 ./bin/kvstore_compare_bench 500 8
 ./bin/kvstore_compare_bench 250 16
+./scripts/run_compare_bench.sh
 ```
 
 说明：
@@ -183,6 +184,17 @@ GET      ops=1000 elapsed=0.0561s throughput=17825.31 ops/s avg_latency=56.10 us
   - `kvstore_no_wal`
   - `kvstore_with_wal`
   - `std_map_mutex`
+
+脚本方式：
+
+- [run_compare_bench.sh](/home/haoo/code/study/KV-Store/scripts/run_compare_bench.sh) 会先执行 `cmake --build build -j`，再运行对比压测
+- 默认参数等价于 `./bin/kvstore_compare_bench 500 8`
+- 可通过环境变量覆盖：
+
+```bash
+OPS_PER_THREAD=1000 MAX_THREADS=16 ./scripts/run_compare_bench.sh
+OUTPUT_FILE=results/compare.txt ./scripts/run_compare_bench.sh
+```
 
 混合负载比例：
 
@@ -249,12 +261,83 @@ kvstore_with_wal      16        250           4000          15.6657     255.34  
 std_map_mutex         16        250           4000          0.0042      959867.92         1041.81           1600
 ```
 
-### 7.3 结果分析摘要
+### 7.3 当前最新结果
+
+以下为当前代码版本通过 [run_compare_bench.sh](/home/haoo/code/study/KV-Store/scripts/run_compare_bench.sh) 实测得到的代表性结果：
+
+```text
+benchmark             threads   ops/thread    total_ops     seconds     throughput(op/s)  avg_latency(ns)   final_size
+kvstore_no_wal        1         500           500           0.0005      926509.28         1079.32           200
+kvstore_with_wal      1         500           500           1.0303      485.29            2060633.08        200
+std_map_mutex         1         500           500           0.0003      1916296.18        521.84            200
+kvstore_no_wal        2         500           1000          0.0024      409297.60         2443.21           400
+kvstore_with_wal      2         500           1000          2.0044      498.89            2004436.17        400
+std_map_mutex         2         500           1000          0.0006      1580203.21        632.83            400
+kvstore_no_wal        4         500           2000          0.0041      492585.36         2030.11           800
+kvstore_with_wal      4         500           2000          4.2242      473.46            2112120.83        800
+std_map_mutex         4         500           2000          0.0014      1458629.62        685.58            800
+kvstore_no_wal        8         500           4000          0.0109      367997.13         2717.41           1600
+kvstore_with_wal      8         500           4000          8.4606      472.78            2115159.56        1600
+std_map_mutex         8         500           4000          0.0026      1514205.14        660.41            1600
+```
+
+### 7.4 优化过程记录
+
+2026-04-01 并发控制重构：
+
+- 去掉 `KVStore` 外层总锁
+- `SkipList` 改为 `shared_timed_mutex` 读写锁
+- `WAL` 追加写单独加锁
+
+阶段结论：
+
+- `with_wal` 吞吐有提升
+- `no_wal` 仍明显低于 `std_map_mutex`
+
+2026-04-01 网络路径优化：
+
+- 服务端与客户端 socket 开启 `TCP_NODELAY`
+- 服务端改为读完命令后优先直接写回，仅在 `EAGAIN` 时注册 `EPOLLOUT`
+- benchmark/client 的响应读取从逐字节 `read` 改为缓冲读取
+
+阶段结论：
+
+- 端到端 `no_wal` 网络压测从约 `500 qps` 提升到约 `5万+ qps`
+- 说明此前网络请求响应路径才是端到端测试中的主瓶颈
+
+2026-04-01 WAL 刷盘策略优化：
+
+- 将 WAL 从“每次写后立即 `fsync`”改为“可配置刷盘间隔”
+- 服务端默认使用 `--wal-sync-ms 10`
+- 保留 `--wal-sync-ms 0` 作为每次同步刷盘模式
+
+阶段结论：
+
+- `with_wal` 端到端网络吞吐大幅提升
+- 当前 durability 与吞吐的权衡变为可配置
+
+2026-04-01 SkipList 节点链路优化：
+
+- 将跳表节点前向链路从 `shared_ptr` 改为 `unique_ptr + Node*`
+- 目标是降低 `kvstore_no_wal` 热点路径中的引用计数开销
+
+阶段结论：
+
+- `kvstore_no_wal` 较之前版本有明显提升
+- 说明 `shared_ptr` 的热点开销判断成立
+
+当前综合结论：
+
+- `kvstore_no_wal` 较之前版本有明显提升，说明 `shared_ptr` 的热点开销判断是成立的
+- `kvstore_with_wal` 仍稳定在约 `470~500 ops/s`，说明当前主瓶颈仍是同步 WAL 路径
+- `std_map_mutex` 依然高于 `kvstore_no_wal`，后续仍可继续优化锁与节点布局
+
+### 7.5 结果分析摘要
 
 - `std_map_mutex` 在当前实现下整体吞吐高于 `kvstore_no_wal`
-- `kvstore_with_wal` 的吞吐基本稳定在约 `245~265 ops/s`
-- WAL 的主要瓶颈来自每次写入后的 `fsync`
-- `kvstore_no_wal` 在线程数增加后没有线性扩展，说明当前版本仍受全局互斥和实现常数开销影响较大
+- `kvstore_with_wal` 在进程内对比压测下当前稳定在约 `470~500 ops/s`
+- WAL 的主要瓶颈仍来自刷盘路径，只是现在已支持通过刷盘间隔进行权衡
+- `kvstore_no_wal` 在线程数增加后仍未达到 `std_map_mutex` 水平，说明当前版本仍受锁与节点布局常数开销影响
 
 ## 8. 文本协议说明
 

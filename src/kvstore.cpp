@@ -11,7 +11,7 @@ class KVStore::Impl {
 public:
     explicit Impl(const EngineOptions& options)
         : index(),
-          wal(options.wal_path),
+          wal(options.wal_path, options.wal_sync_interval_ms),
           wal_enabled(options.enable_wal) {
         if (wal_enabled) {
             wal.Replay([this](const LogRecord& record) {

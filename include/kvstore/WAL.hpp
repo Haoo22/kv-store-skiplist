@@ -1,11 +1,13 @@
 #pragma once
 
 #include <cstddef>
+#include <condition_variable>
 #include <cstdint>
 #include <functional>
 #include <memory>
 #include <mutex>
 #include <string>
+#include <thread>
 
 namespace kvstore {
 
@@ -27,13 +29,13 @@ struct ReplayStats {
 
 class WAL {
 public:
-    explicit WAL(std::string file_path);
+    explicit WAL(std::string file_path, int sync_interval_ms = 0);
     ~WAL();
 
     WAL(const WAL&) = delete;
     WAL& operator=(const WAL&) = delete;
-    WAL(WAL&&) noexcept;
-    WAL& operator=(WAL&&) noexcept;
+    WAL(WAL&&) noexcept = delete;
+    WAL& operator=(WAL&&) noexcept = delete;
 
     void AppendPut(const std::string& key, const std::string& value);
     void AppendDelete(const std::string& key);
@@ -44,10 +46,21 @@ public:
     const std::string& path() const noexcept;
 
 private:
+    void StartSyncThread();
+    void StopSyncThread();
+    void MarkDirty();
+    void SyncLoop();
+
     class Impl;
 
     std::string file_path_;
     mutable std::mutex append_mutex_;
+    std::mutex sync_mutex_;
+    std::condition_variable sync_cv_;
+    bool stop_sync_ {false};
+    bool dirty_ {false};
+    int sync_interval_ms_ {0};
+    std::thread sync_thread_;
     std::unique_ptr<Impl> impl_;
 };
 
