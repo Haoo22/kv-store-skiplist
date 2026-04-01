@@ -502,6 +502,34 @@ std_map_mutex    834123.06 ops/s
 - 继续优化锁细粒度之前，应该先解决真正更重的热点：协议解析、字符串处理、单线程执行模型本身
 - 锁细粒度优化仍值得继续验证，但应建立在“协议路径和执行模型已基本稳定”的前提下再做，否则测试结果容易被更大的上层开销掩盖
 
+问题 5：协议解析和字符串处理是否是当前明显热点？
+
+- 初始猜想：`Protocol.cpp` 中的 `Trim + Tokenize + istringstream + 多次 string 拷贝` 可能对单线程 server 有可见影响
+- 实验动作：将 `CommandProcessor::Execute()` 改为手写解析路径，去掉 `Tokenize()` 和 `istringstream`
+- 测试结果：
+
+```text
+no_wal
+pipeline=1
+PUT  18791.16 ops/s
+GET  20352.51 ops/s
+
+pipeline=64
+PUT  323070.46 ops/s
+GET  334336.34 ops/s
+
+with_wal(sync_ms=10)
+pipeline=1
+PUT   8872.11 ops/s
+GET  20331.48 ops/s
+
+pipeline=64
+PUT  108579.99 ops/s
+GET  205952.01 ops/s
+```
+
+- 当前结论：协议解析路径确实是热点之一，但在当前整体架构下，它还不是决定性瓶颈；优化后没有出现数量级提升，说明单线程执行模型仍然是更大的上层限制
+
 ## 8. 文本协议说明
 
 所有请求与响应均以 `\r\n` 结束。

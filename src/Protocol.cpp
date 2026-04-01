@@ -2,7 +2,6 @@
 
 #include <algorithm>
 #include <cctype>
-#include <sstream>
 #include <stdexcept>
 #include <utility>
 
@@ -14,6 +13,20 @@ std::string ToUpper(std::string text) {
         return static_cast<char>(std::toupper(ch));
     });
     return text;
+}
+
+std::string::size_type SkipSpaces(const std::string& text, std::string::size_type pos) {
+    while (pos < text.size() && std::isspace(static_cast<unsigned char>(text[pos])) != 0) {
+        ++pos;
+    }
+    return pos;
+}
+
+std::string::size_type FindTokenEnd(const std::string& text, std::string::size_type pos) {
+    while (pos < text.size() && std::isspace(static_cast<unsigned char>(text[pos])) == 0) {
+        ++pos;
+    }
+    return pos;
 }
 
 }  // namespace
@@ -47,69 +60,96 @@ std::string CommandProcessor::Execute(const std::string& line) const {
         return "ERROR empty command\r\n";
     }
 
-    const std::vector<std::string> tokens = Tokenize(trimmed);
-    if (tokens.empty()) {
-        return "ERROR empty command\r\n";
-    }
-
-    const std::string command = ToUpper(tokens[0]);
+    const std::string::size_type command_end = FindTokenEnd(trimmed, 0);
+    const std::string command = ToUpper(trimmed.substr(0, command_end));
+    const std::string::size_type args_begin = SkipSpaces(trimmed, command_end);
 
     if (command == "PING") {
-        return "PONG\r\n";
+        return args_begin == trimmed.size() ? "PONG\r\n" : "ERROR usage: PING\r\n";
     }
 
     if (command == "GET") {
-        if (tokens.size() != 2) {
+        if (args_begin == trimmed.size()) {
             return "ERROR usage: GET <key>\r\n";
         }
 
+        const std::string::size_type key_end = FindTokenEnd(trimmed, args_begin);
+        if (SkipSpaces(trimmed, key_end) != trimmed.size()) {
+            return "ERROR usage: GET <key>\r\n";
+        }
+
+        const std::string key = trimmed.substr(args_begin, key_end - args_begin);
+
         std::string value;
-        if (!store_.Get(tokens[1], &value)) {
+        if (!store_.Get(key, &value)) {
             return "NOT_FOUND\r\n";
         }
         return "VALUE " + value + "\r\n";
     }
 
     if (command == "DEL") {
-        if (tokens.size() != 2) {
+        if (args_begin == trimmed.size()) {
             return "ERROR usage: DEL <key>\r\n";
         }
-        return store_.Delete(tokens[1]) ? "OK DELETE\r\n" : "NOT_FOUND\r\n";
+
+        const std::string::size_type key_end = FindTokenEnd(trimmed, args_begin);
+        if (SkipSpaces(trimmed, key_end) != trimmed.size()) {
+            return "ERROR usage: DEL <key>\r\n";
+        }
+
+        const std::string key = trimmed.substr(args_begin, key_end - args_begin);
+        return store_.Delete(key) ? "OK DELETE\r\n" : "NOT_FOUND\r\n";
     }
 
     if (command == "SCAN") {
-        if (tokens.size() != 3) {
+        if (args_begin == trimmed.size()) {
             return "ERROR usage: SCAN <start> <end>\r\n";
         }
 
-        const auto pairs = store_.Scan(tokens[1], tokens[2]);
-        std::ostringstream output;
-        output << "RESULT " << pairs.size();
-        for (const auto& pair : pairs) {
-            output << ' ' << pair.first << '=' << pair.second;
+        const std::string::size_type start_end = FindTokenEnd(trimmed, args_begin);
+        const std::string::size_type end_begin = SkipSpaces(trimmed, start_end);
+        if (end_begin == trimmed.size()) {
+            return "ERROR usage: SCAN <start> <end>\r\n";
         }
-        output << "\r\n";
-        return output.str();
+        const std::string::size_type end_end = FindTokenEnd(trimmed, end_begin);
+        if (SkipSpaces(trimmed, end_end) != trimmed.size()) {
+            return "ERROR usage: SCAN <start> <end>\r\n";
+        }
+
+        const std::string start = trimmed.substr(args_begin, start_end - args_begin);
+        const std::string end = trimmed.substr(end_begin, end_end - end_begin);
+        const auto pairs = store_.Scan(start, end);
+        std::string output = "RESULT " + std::to_string(pairs.size());
+        for (const auto& pair : pairs) {
+            output.push_back(' ');
+            output.append(pair.first);
+            output.push_back('=');
+            output.append(pair.second);
+        }
+        output.append("\r\n");
+        return output;
     }
 
     if (command == "QUIT") {
-        return "BYE\r\n";
+        return args_begin == trimmed.size() ? "BYE\r\n" : "ERROR usage: QUIT\r\n";
     }
 
     if (command == "PUT") {
-        const std::string::size_type command_end = trimmed.find(' ');
-        if (command_end == std::string::npos) {
+        if (args_begin == trimmed.size()) {
             return "ERROR usage: PUT <key> <value>\r\n";
         }
 
-        const std::string remainder = Trim(trimmed.substr(command_end + 1));
-        const std::string::size_type key_end = remainder.find(' ');
+        const std::string::size_type key_end = FindTokenEnd(trimmed, args_begin);
         if (key_end == std::string::npos) {
             return "ERROR usage: PUT <key> <value>\r\n";
         }
+        const std::string::size_type value_begin = SkipSpaces(trimmed, key_end);
+        if (value_begin == trimmed.size()) {
+            return "ERROR usage: PUT <key> <value>\r\n";
+        }
 
-        const std::string key = remainder.substr(0, key_end);
-        const std::string value = remainder.substr(key_end + 1);
+        const std::string key = trimmed.substr(args_begin, key_end - args_begin);
+        const std::string value = trimmed.substr(value_begin);
         if (key.empty() || value.empty()) {
             return "ERROR usage: PUT <key> <value>\r\n";
         }
@@ -118,16 +158,6 @@ std::string CommandProcessor::Execute(const std::string& line) const {
     }
 
     return "ERROR unknown command\r\n";
-}
-
-std::vector<std::string> CommandProcessor::Tokenize(const std::string& line) {
-    std::istringstream input(line);
-    std::vector<std::string> tokens;
-    std::string token;
-    while (input >> token) {
-        tokens.push_back(token);
-    }
-    return tokens;
 }
 
 std::string CommandProcessor::Trim(const std::string& text) {

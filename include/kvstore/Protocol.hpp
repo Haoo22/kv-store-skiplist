@@ -24,7 +24,6 @@ public:
     std::string Execute(const std::string& line) const;
 
 private:
-    static std::vector<std::string> Tokenize(const std::string& line);
     static std::string Trim(const std::string& text);
 
     KVStore& store_;
