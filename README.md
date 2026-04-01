@@ -378,6 +378,55 @@ GET  385104.17 ops/s
 - WAL 的主要瓶颈仍来自刷盘路径，只是现在已支持通过刷盘间隔进行权衡
 - `kvstore_no_wal` 在线程数增加后仍未达到 `std_map_mutex` 水平，说明当前版本仍受锁与节点布局常数开销影响
 
+### 7.6 数据规模与负载实验
+
+为验证 `SkipList` 是否会在更大数据规模和偏读场景下反超 `std::map`，对 [compare_benchmark_main.cpp](/home/haoo/code/study/KV-Store/src/compare_benchmark_main.cpp) 增加了：
+
+- `preload_keys`：预填充键数量
+- `workload`：`mixed/read/write`
+
+示例命令：
+
+```bash
+./bin/kvstore_compare_bench 50000 8 100000 read
+./bin/kvstore_compare_bench 50000 8 300000 read
+./bin/kvstore_compare_bench 50000 8 100000 mixed
+```
+
+读密集场景（`90% GET, 10% PUT`）下的 `8` 线程结果：
+
+```text
+preload=10000
+kvstore_no_wal  413791.87 ops/s
+std_map_mutex   998355.36 ops/s
+
+preload=100000
+kvstore_no_wal  394564.46 ops/s
+std_map_mutex   916509.13 ops/s
+
+preload=200000
+kvstore_no_wal  338968.57 ops/s
+std_map_mutex   770316.47 ops/s
+
+preload=300000
+kvstore_no_wal  342112.01 ops/s
+std_map_mutex   789707.82 ops/s
+```
+
+混合场景（`40% PUT, 50% GET, 10% DELETE/PUT+GET`）在 `preload=100000, 8` 线程下：
+
+```text
+kvstore_no_wal  249540.59 ops/s
+std_map_mutex   628435.53 ops/s
+```
+
+实验结论：
+
+- 到当前测试规模为止，`SkipList` 尚未在进程内对比压测中反超 `std_map_mutex`
+- 随着数据量增大，两者吞吐都会下降，但目前没有出现 `SkipList` 越跑越占优的趋势
+- 说明当前瓶颈仍主要来自实现常数与锁开销，而不是数据结构理论复杂度本身
+- 在 `preload=500000` 的读密集实验中，benchmark 出现过一次异常退出（`exit 139`），该稳定性问题仍需单独排查
+
 ## 8. 文本协议说明
 
 所有请求与响应均以 `\r\n` 结束。
