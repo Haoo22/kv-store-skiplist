@@ -152,6 +152,7 @@ BYE
 
 ```bash
 ./bin/kvstore_bench 127.0.0.1 6380 1000
+./bin/kvstore_bench 127.0.0.1 6380 10000 64
 ```
 
 参数含义：
@@ -159,6 +160,7 @@ BYE
 - 第 1 个参数：服务端 IP
 - 第 2 个参数：服务端端口
 - 第 3 个参数：每个阶段的操作次数
+- 第 4 个参数：可选，pipeline 深度，默认 `1`
 
 输出示例：
 
@@ -325,6 +327,43 @@ std_map_mutex         8         500           4000          0.0026      1514205.
 
 - `kvstore_no_wal` 较之前版本有明显提升
 - 说明 `shared_ptr` 的热点开销判断成立
+
+2026-04-01 Pipeline Benchmark 压测补充：
+
+- 为 [benchmark_main.cpp](/home/haoo/code/study/KV-Store/src/benchmark_main.cpp) 增加 `pipeline_depth` 参数
+- 支持批量发送请求、批量接收响应，用于测量端到端服务端吞吐上限
+
+测试命令：
+
+```bash
+./bin/kvstore_bench 127.0.0.1 6380 10000 1
+./bin/kvstore_bench 127.0.0.1 6380 10000 64
+```
+
+端到端结果：
+
+```text
+no_wal, pipeline=1
+PUT  19837.57 ops/s
+GET  20877.61 ops/s
+
+no_wal, pipeline=64
+PUT  546776.75 ops/s
+GET  608050.59 ops/s
+
+with_wal(sync_ms=10), pipeline=1
+PUT   9389.67 ops/s
+GET  19974.59 ops/s
+
+with_wal(sync_ms=10), pipeline=64
+PUT  131589.34 ops/s
+GET  385104.17 ops/s
+```
+
+阶段结论：
+
+- 端到端 `10w qps` 目标在 pipeline 模式下已经达到
+- 串行 benchmark 更接近交互延迟测试，pipeline benchmark 更接近服务端吞吐上限测试
 
 当前综合结论：
 

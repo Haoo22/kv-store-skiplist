@@ -139,9 +139,10 @@ int main(int argc, char** argv) {
     const std::string host = argc > 1 ? argv[1] : "127.0.0.1";
     const std::uint16_t port = argc > 2 ? static_cast<std::uint16_t>(std::stoi(argv[2])) : 6380U;
     const int operations = argc > 3 ? std::stoi(argv[3]) : 1000;
+    const int pipeline_depth = argc > 4 ? std::stoi(argv[4]) : 1;
 
-    if (operations <= 0) {
-        std::cerr << "Benchmark error: operations must be positive\n";
+    if (operations <= 0 || pipeline_depth <= 0) {
+        std::cerr << "Benchmark error: operations and pipeline_depth must be positive\n";
         return 1;
     }
 
@@ -151,24 +152,37 @@ int main(int argc, char** argv) {
 
         auto run_phase = [&](const std::string& name, const std::string& verb) {
             const auto begin = std::chrono::steady_clock::now();
-            for (int index = 0; index < operations; ++index) {
-                const std::string key = "bench-key-" + std::to_string(index);
-                const std::string value = "bench-value-" + std::to_string(index);
-                std::string command;
+            for (int index = 0; index < operations; index += pipeline_depth) {
+                const int batch_size = std::min(pipeline_depth, operations - index);
+                std::string batch;
 
-                if (verb == "PUT") {
-                    command = "PUT " + key + ' ' + value + "\r\n";
-                } else {
-                    command = "GET " + key + "\r\n";
+                for (int offset = 0; offset < batch_size; ++offset) {
+                    const int current = index + offset;
+                    const std::string key = "bench-key-" + std::to_string(current);
+                    const std::string value = "bench-value-" + std::to_string(current);
+
+                    if (verb == "PUT") {
+                        batch.append("PUT ");
+                        batch.append(key);
+                        batch.push_back(' ');
+                        batch.append(value);
+                        batch.append("\r\n");
+                    } else {
+                        batch.append("GET ");
+                        batch.append(key);
+                        batch.append("\r\n");
+                    }
                 }
 
-                WriteAll(socket.get(), command);
-                const std::string response = reader.ReadLine(socket.get());
-                if (verb == "PUT" && !StartsWith(response, "OK ")) {
-                    throw std::runtime_error("unexpected PUT response: " + response);
-                }
-                if (verb == "GET" && !StartsWith(response, "VALUE ")) {
-                    throw std::runtime_error("unexpected GET response: " + response);
+                WriteAll(socket.get(), batch);
+                for (int offset = 0; offset < batch_size; ++offset) {
+                    const std::string response = reader.ReadLine(socket.get());
+                    if (verb == "PUT" && !StartsWith(response, "OK ")) {
+                        throw std::runtime_error("unexpected PUT response: " + response);
+                    }
+                    if (verb == "GET" && !StartsWith(response, "VALUE ")) {
+                        throw std::runtime_error("unexpected GET response: " + response);
+                    }
                 }
             }
 
@@ -182,6 +196,7 @@ int main(int argc, char** argv) {
 
             std::cout << std::left << std::setw(8) << name
                       << " ops=" << operations
+                      << " pipeline=" << pipeline_depth
                       << " elapsed=" << std::fixed << std::setprecision(4) << seconds << "s"
                       << " throughput=" << std::setprecision(2) << throughput << " ops/s"
                       << " avg_latency=" << std::setprecision(2) << latency_us << " us\n";
