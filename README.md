@@ -425,7 +425,45 @@ std_map_mutex   628435.53 ops/s
 - 到当前测试规模为止，`SkipList` 尚未在进程内对比压测中反超 `std_map_mutex`
 - 随着数据量增大，两者吞吐都会下降，但目前没有出现 `SkipList` 越跑越占优的趋势
 - 说明当前瓶颈仍主要来自实现常数与锁开销，而不是数据结构理论复杂度本身
-- 在 `preload=500000` 的读密集实验中，benchmark 出现过一次异常退出（`exit 139`），该稳定性问题仍需单独排查
+- 在 `preload=500000` 的读密集实验中，曾出现过一次异常退出（`exit 139`）
+
+### 7.7 大数据量稳定性问题排查
+
+对 `preload=500000, workload=read` 的异常退出进行复现与定位后，确认问题并非读写竞争，而是 `SkipList` 在大数据量析构时的递归释放导致的栈溢出。
+
+复现命令：
+
+```bash
+./bin/kvstore_compare_bench 50000 8 500000 read
+```
+
+问题原因：
+
+- `SkipList` 当前通过 `unique_ptr<Node> next` 串起 level 0 的所有权链
+- 在 benchmark 结束后，局部 `KVStore` / `SkipList` 析构时会沿 `next` 递归析构整条节点链
+- 当节点规模达到 `50w+` 时，递归深度足以触发栈溢出
+
+修复方式：
+
+- 为 `SkipList` 增加显式析构函数
+- 将节点释放改为迭代式 `ReleaseAllNodes()`，避免深链递归销毁
+
+修复后重新测试：
+
+```text
+Workload read: 90% GET, 10% PUT
+Preloaded keys: 500000
+
+8 threads
+kvstore_no_wal   382900.39 ops/s
+kvstore_with_wal 266878.65 ops/s
+std_map_mutex    834123.06 ops/s
+```
+
+结论：
+
+- `preload=500000` 的读密集压测已可稳定完成
+- 本次修复解决的是大数据量稳定性问题，不改变当前“`std_map_mutex` 仍快于 `SkipList`”的整体判断
 
 ## 8. 文本协议说明
 

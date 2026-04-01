@@ -34,6 +34,9 @@ public:
     SkipList& operator=(const SkipList&) = delete;
     SkipList(SkipList&&) = delete;
     SkipList& operator=(SkipList&&) = delete;
+    ~SkipList() {
+        Clear();
+    }
 
     bool Put(const Key& key, const Value& value) {
         std::unique_lock<std::shared_timed_mutex> lock(mutex_);
@@ -149,7 +152,7 @@ public:
 
     void Clear() {
         std::unique_lock<std::shared_timed_mutex> lock(mutex_);
-        head_->next.reset();
+        ReleaseAllNodes();
         for (std::size_t level = 0; level < max_level_; ++level) {
             head_->forward[level] = nullptr;
         }
@@ -206,6 +209,13 @@ private:
             ++level;
         }
         return level;
+    }
+
+    void ReleaseAllNodes() {
+        while (head_->next != nullptr) {
+            std::unique_ptr<Node> node = std::move(head_->next);
+            head_->next = std::move(node->next);
+        }
     }
 
     const std::size_t max_level_;
