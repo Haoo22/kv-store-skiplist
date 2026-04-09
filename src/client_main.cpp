@@ -2,6 +2,7 @@
 #include <cstdint>
 #include <cstring>
 #include <iostream>
+#include <limits>
 #include <stdexcept>
 #include <string>
 
@@ -127,17 +128,51 @@ private:
     std::string buffer_;
 };
 
+void PrintUsage() {
+    std::cerr << "Usage: ./bin/kvstore_client [host] [port]\n"
+                 "  host: server IPv4 address (default 127.0.0.1)\n"
+                 "  port: server port (default 6380)\n";
+}
+
+std::uint16_t ParsePort(const char* text) {
+    char* end = nullptr;
+    errno = 0;
+    const long value = std::strtol(text, &end, 10);
+    if (errno != 0 || end == text || *end != '\0' || value < 0 ||
+        value > std::numeric_limits<std::uint16_t>::max()) {
+        throw std::invalid_argument("invalid port");
+    }
+    return static_cast<std::uint16_t>(value);
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
-    const std::string host = argc > 1 ? argv[1] : "127.0.0.1";
-    const std::uint16_t port = argc > 2 ? static_cast<std::uint16_t>(std::stoi(argv[2])) : 6380U;
+    if (argc > 1) {
+        const std::string first = argv[1];
+        if (first == "--help" || first == "-h") {
+            PrintUsage();
+            return 0;
+        }
+    }
+
+    std::string host = "127.0.0.1";
+    std::uint16_t port = 6380U;
+
+    try {
+        host = argc > 1 ? argv[1] : "127.0.0.1";
+        port = argc > 2 ? ParsePort(argv[2]) : 6380U;
+    } catch (const std::exception&) {
+        PrintUsage();
+        std::cerr << "Client error: invalid command line arguments\n";
+        return 1;
+    }
 
     try {
         SocketHandle socket = Connect(host, port);
         LineReader reader;
         std::cout << "Connected to " << host << ':' << port << '\n';
-        std::cout << "Type commands like PUT key value, GET key, SCAN a z, DEL key, QUIT\n";
+        std::cout << "Type commands like PING, PUT key value, GET key, SCAN a z, DEL key, QUIT\n";
 
         std::string line;
         while (std::cout << "> " && std::getline(std::cin, line)) {

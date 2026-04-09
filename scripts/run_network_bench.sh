@@ -12,7 +12,27 @@ HOST="${HOST:-127.0.0.1}"
 PORT="${PORT:-6380}"
 SINGLE_OPS="${SINGLE_OPS:-1000}"
 MULTI_OPS="${MULTI_OPS:-500}"
+PIPELINE_DEPTH="${PIPELINE_DEPTH:-1}"
+MULTI_PIPELINE_DEPTH="${MULTI_PIPELINE_DEPTH:-8}"
+SCENARIO="${SCENARIO:-put-get}"
 CLIENTS="${CLIENTS:-8 16}"
+
+if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
+    cat <<'EOF'
+Usage: ./scripts/run_network_bench.sh
+
+Environment overrides:
+  HOST                 server host (default 127.0.0.1)
+  PORT                 server port (default 6380)
+  SINGLE_OPS           single-client operations per phase (default 1000)
+  MULTI_OPS            multi-client operations per phase (default 500)
+  PIPELINE_DEPTH       single-client pipeline depth (default 1)
+  MULTI_PIPELINE_DEPTH multi-client pipeline depth (default 8)
+  SCENARIO             benchmark scenario: put-get | full (default put-get)
+  CLIENTS              space-separated client counts (default "8 16")
+EOF
+    exit 0
+fi
 
 cleanup() {
     if [[ -n "${SERVER_PID:-}" ]]; then
@@ -37,25 +57,7 @@ start_server() {
 
 run_multi_client() {
     local clients="$1"
-    local total_requests=$((clients * MULTI_OPS * 2))
-    local start_ns
-    local end_ns
-    local elapsed_ns
-
-    start_ns=$(date +%s%N)
-    seq "$clients" | xargs -I{} -P "$clients" \
-        "$BENCH_BIN" "$HOST" "$PORT" "$MULTI_OPS" \
-        >"/tmp/kvbench_${clients}.out"
-    end_ns=$(date +%s%N)
-    elapsed_ns=$((end_ns - start_ns))
-
-    awk -v clients="$clients" -v ops="$MULTI_OPS" -v total="$total_requests" -v elapsed_ns="$elapsed_ns" '
-        BEGIN {
-            seconds = elapsed_ns / 1000000000.0;
-            qps = total / seconds;
-            printf("clients=%d ops_per_client=%d total_requests=%d wall_seconds=%.4f aggregate_qps=%.2f\n",
-                   clients, ops, total, seconds, qps);
-        }'
+    "$BENCH_BIN" "$HOST" "$PORT" "$MULTI_OPS" "$MULTI_PIPELINE_DEPTH" "$SCENARIO" "$clients"
 }
 
 run_case() {
@@ -66,7 +68,7 @@ run_case() {
     start_server "$name" "$@"
 
     echo "-- single client --"
-    "$BENCH_BIN" "$HOST" "$PORT" "$SINGLE_OPS"
+    "$BENCH_BIN" "$HOST" "$PORT" "$SINGLE_OPS" "$PIPELINE_DEPTH" "$SCENARIO"
 
     echo "-- multi client --"
     for client_count in $CLIENTS; do

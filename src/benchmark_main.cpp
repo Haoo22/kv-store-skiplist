@@ -1,10 +1,15 @@
 #include <chrono>
 #include <cerrno>
 #include <cstring>
+#include <exception>
+#include <functional>
 #include <iomanip>
 #include <iostream>
+#include <limits>
 #include <stdexcept>
 #include <string>
+#include <thread>
+#include <vector>
 
 #include <arpa/inet.h>
 #include <netinet/in.h>
@@ -133,81 +138,281 @@ bool StartsWith(const std::string& text, const std::string& prefix) {
            text.compare(0, prefix.size(), prefix) == 0;
 }
 
+enum class Scenario {
+    kPutGet,
+    kFullProtocol,
+};
+
+struct PhaseDefinition {
+    std::string name;
+    int requests_per_operation {0};
+};
+
+struct RunOptions {
+    std::string host;
+    std::uint16_t port {6380U};
+    int operations {1000};
+    int pipeline_depth {1};
+    Scenario scenario {Scenario::kPutGet};
+    int clients {1};
+};
+
+Scenario ParseScenario(const std::string& text) {
+    if (text == "put-get") {
+        return Scenario::kPutGet;
+    }
+    if (text == "full") {
+        return Scenario::kFullProtocol;
+    }
+    throw std::invalid_argument("invalid scenario: " + text);
+}
+
+std::vector<PhaseDefinition> BuildPhaseDefinitions(Scenario scenario) {
+    std::vector<PhaseDefinition> phases;
+    if (scenario == Scenario::kFullProtocol) {
+        phases.push_back({"PING", 1});
+    }
+    phases.push_back({"PUT", 1});
+    phases.push_back({"GET", 1});
+    if (scenario == Scenario::kFullProtocol) {
+        phases.push_back({"SCAN", 1});
+        phases.push_back({"DEL", 1});
+    }
+    return phases;
+}
+
+void PrintUsage() {
+    std::cerr << "Usage: ./bin/kvstore_bench [host] [port] [operations] [pipeline_depth]"
+                 " [scenario] [clients]\n"
+                 "  host: IPv4 server address (default 127.0.0.1)\n"
+                 "  port: server port (default 6380)\n"
+                 "  operations: requests per phase per client (default 1000)\n"
+                 "  pipeline_depth: in-flight requests per batch (default 1)\n"
+                 "  scenario: put-get (default) | full\n"
+                 "  clients: concurrent benchmark clients (default 1)\n";
+}
+
+int ParsePositiveInt(const char* text, const char* field_name) {
+    char* end = nullptr;
+    errno = 0;
+    const long value = std::strtol(text, &end, 10);
+    if (errno != 0 || end == text || *end != '\0' || value <= 0 ||
+        value > std::numeric_limits<int>::max()) {
+        throw std::invalid_argument(std::string("invalid ") + field_name);
+    }
+    return static_cast<int>(value);
+}
+
+std::uint16_t ParsePort(const char* text) {
+    char* end = nullptr;
+    errno = 0;
+    const long value = std::strtol(text, &end, 10);
+    if (errno != 0 || end == text || *end != '\0' || value < 0 ||
+        value > std::numeric_limits<std::uint16_t>::max()) {
+        throw std::invalid_argument("invalid port");
+    }
+    return static_cast<std::uint16_t>(value);
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
-    const std::string host = argc > 1 ? argv[1] : "127.0.0.1";
-    const std::uint16_t port = argc > 2 ? static_cast<std::uint16_t>(std::stoi(argv[2])) : 6380U;
-    const int operations = argc > 3 ? std::stoi(argv[3]) : 1000;
-    const int pipeline_depth = argc > 4 ? std::stoi(argv[4]) : 1;
+    if (argc > 1) {
+        const std::string first = argv[1];
+        if (first == "--help" || first == "-h") {
+            PrintUsage();
+            return 0;
+        }
+    }
 
-    if (operations <= 0 || pipeline_depth <= 0) {
-        std::cerr << "Benchmark error: operations and pipeline_depth must be positive\n";
+    RunOptions options;
+    try {
+        options.host = argc > 1 ? argv[1] : "127.0.0.1";
+        options.port = argc > 2 ? ParsePort(argv[2]) : 6380U;
+        options.operations = argc > 3 ? ParsePositiveInt(argv[3], "operations") : 1000;
+        options.pipeline_depth =
+            argc > 4 ? ParsePositiveInt(argv[4], "pipeline depth") : 1;
+        options.scenario = argc > 5 ? ParseScenario(argv[5]) : Scenario::kPutGet;
+        options.clients = argc > 6 ? ParsePositiveInt(argv[6], "clients") : 1;
+    } catch (const std::invalid_argument& ex) {
+        PrintUsage();
+        std::cerr << "Benchmark error: " << ex.what() << '\n';
         return 1;
     }
 
     try {
-        SocketHandle socket = Connect(host, port);
-        LineReader reader;
+        const std::vector<PhaseDefinition> phases = BuildPhaseDefinitions(options.scenario);
 
-        auto run_phase = [&](const std::string& name, const std::string& verb) {
-            const auto begin = std::chrono::steady_clock::now();
-            for (int index = 0; index < operations; index += pipeline_depth) {
-                const int batch_size = std::min(pipeline_depth, operations - index);
-                std::string batch;
+        auto run_client = [&](int client_index, bool print_phase_stats) {
+            SocketHandle socket = Connect(options.host, options.port);
+            LineReader reader;
 
-                for (int offset = 0; offset < batch_size; ++offset) {
-                    const int current = index + offset;
-                    const std::string key = "bench-key-" + std::to_string(current);
-                    const std::string value = "bench-value-" + std::to_string(current);
+            auto run_phase =
+                [&](const std::string& name,
+                    const std::function<std::string(int)>& build_request,
+                    const std::function<void(const std::string&)>& validate_response) {
+                const auto begin = std::chrono::steady_clock::now();
+                for (int index = 0; index < options.operations; index += options.pipeline_depth) {
+                    const int batch_size =
+                        std::min(options.pipeline_depth, options.operations - index);
+                    std::string batch;
 
-                    if (verb == "PUT") {
-                        batch.append("PUT ");
-                        batch.append(key);
-                        batch.push_back(' ');
-                        batch.append(value);
-                        batch.append("\r\n");
-                    } else {
-                        batch.append("GET ");
-                        batch.append(key);
-                        batch.append("\r\n");
+                    for (int offset = 0; offset < batch_size; ++offset) {
+                        const int current = index + offset;
+                        batch.append(build_request(current));
+                    }
+
+                    WriteAll(socket.get(), batch);
+                    for (int offset = 0; offset < batch_size; ++offset) {
+                        const std::string response = reader.ReadLine(socket.get());
+                        validate_response(response);
                     }
                 }
 
-                WriteAll(socket.get(), batch);
-                for (int offset = 0; offset < batch_size; ++offset) {
-                    const std::string response = reader.ReadLine(socket.get());
-                    if (verb == "PUT" && !StartsWith(response, "OK ")) {
-                        throw std::runtime_error("unexpected PUT response: " + response);
+                const auto end = std::chrono::steady_clock::now();
+                const auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(
+                    end - begin);
+                const double seconds = static_cast<double>(elapsed.count()) / 1000000.0;
+                const double throughput = static_cast<double>(options.operations) / seconds;
+                const double latency_us = static_cast<double>(elapsed.count()) /
+                                          static_cast<double>(options.operations);
+
+                if (print_phase_stats) {
+                    std::cout << std::left << std::setw(8) << name
+                              << " ops=" << options.operations
+                              << " pipeline=" << options.pipeline_depth
+                              << " elapsed=" << std::fixed << std::setprecision(4) << seconds
+                              << "s"
+                              << " throughput=" << std::setprecision(2) << throughput
+                              << " ops/s"
+                              << " avg_latency=" << std::setprecision(2) << latency_us
+                              << " us\n";
+                }
+            };
+
+            const std::string key_prefix = "bench-c" + std::to_string(client_index) + "-key-";
+            const std::string value_prefix = "bench-c" + std::to_string(client_index) + "-value-";
+            auto make_key = [&](int index) {
+                return key_prefix + std::to_string(index);
+            };
+            auto make_value = [&](int index) {
+                return value_prefix + std::to_string(index);
+            };
+
+            auto expect_prefix = [](const std::string& phase,
+                                    const std::string& prefix,
+                                    const std::string& response) {
+                if (!StartsWith(response, prefix)) {
+                    throw std::runtime_error("unexpected " + phase + " response: " + response);
+                }
+            };
+
+            if (options.scenario == Scenario::kFullProtocol) {
+                run_phase("PING",
+                          [](int) {
+                              return std::string("PING\r\n");
+                          },
+                          [&](const std::string& response) {
+                              expect_prefix("PING", "PONG\r\n", response);
+                          });
+            }
+
+            run_phase("PUT",
+                      [&](int index) {
+                          return "PUT " + make_key(index) + " " + make_value(index) + "\r\n";
+                      },
+                      [&](const std::string& response) {
+                          if (!StartsWith(response, "OK PUT\r\n") &&
+                              !StartsWith(response, "OK UPDATE\r\n")) {
+                              throw std::runtime_error("unexpected PUT response: " + response);
+                          }
+                      });
+
+            run_phase("GET",
+                      [&](int index) {
+                          return "GET " + make_key(index) + "\r\n";
+                      },
+                      [&](const std::string& response) {
+                          expect_prefix("GET", "VALUE ", response);
+                      });
+
+            if (options.scenario == Scenario::kFullProtocol) {
+                run_phase("SCAN",
+                          [&](int) {
+                              return "SCAN " + key_prefix + "0 " + key_prefix + "zzzzzzzz\r\n";
+                          },
+                          [&](const std::string& response) {
+                              expect_prefix("SCAN", "RESULT ", response);
+                          });
+
+                run_phase("DEL",
+                          [&](int index) {
+                              return "DEL " + make_key(index) + "\r\n";
+                          },
+                          [&](const std::string& response) {
+                              expect_prefix("DEL", "OK DELETE\r\n", response);
+                          });
+            }
+
+            WriteAll(socket.get(), "QUIT\r\n");
+            const std::string quit_response = reader.ReadLine(socket.get());
+            if (!StartsWith(quit_response, "BYE\r\n")) {
+                throw std::runtime_error("unexpected QUIT response: " + quit_response);
+            }
+        };
+
+        if (options.clients == 1) {
+            run_client(0, true);
+        } else {
+            std::vector<std::thread> threads;
+            std::vector<std::exception_ptr> errors(static_cast<std::size_t>(options.clients));
+            threads.reserve(static_cast<std::size_t>(options.clients));
+
+            const auto begin = std::chrono::steady_clock::now();
+            for (int client_index = 0; client_index < options.clients; ++client_index) {
+                threads.emplace_back([&, client_index]() {
+                    try {
+                        run_client(client_index, false);
+                    } catch (...) {
+                        errors[static_cast<std::size_t>(client_index)] = std::current_exception();
                     }
-                    if (verb == "GET" && !StartsWith(response, "VALUE ")) {
-                        throw std::runtime_error("unexpected GET response: " + response);
-                    }
+                });
+            }
+
+            for (std::thread& thread : threads) {
+                thread.join();
+            }
+            for (const std::exception_ptr& error : errors) {
+                if (error != nullptr) {
+                    std::rethrow_exception(error);
                 }
             }
 
             const auto end = std::chrono::steady_clock::now();
-            const auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(
-                end - begin);
-            const double seconds = static_cast<double>(elapsed.count()) / 1000000.0;
-            const double throughput = static_cast<double>(operations) / seconds;
-            const double latency_us = static_cast<double>(elapsed.count()) /
-                                      static_cast<double>(operations);
+            const auto elapsed_ns =
+                std::chrono::duration_cast<std::chrono::nanoseconds>(end - begin).count();
+            const double seconds = static_cast<double>(elapsed_ns) / 1000000000.0;
+            const long long total_requests =
+                static_cast<long long>(options.clients) *
+                static_cast<long long>(options.operations) *
+                static_cast<long long>(phases.size());
+            const double aggregate_qps = static_cast<double>(total_requests) / seconds;
 
-            std::cout << std::left << std::setw(8) << name
-                      << " ops=" << operations
-                      << " pipeline=" << pipeline_depth
-                      << " elapsed=" << std::fixed << std::setprecision(4) << seconds << "s"
-                      << " throughput=" << std::setprecision(2) << throughput << " ops/s"
-                      << " avg_latency=" << std::setprecision(2) << latency_us << " us\n";
-        };
-
-        run_phase("PUT", "PUT");
-        run_phase("GET", "GET");
-
-        WriteAll(socket.get(), "QUIT\r\n");
-        static_cast<void>(reader.ReadLine(socket.get()));
+            std::cout << "clients=" << options.clients
+                      << " scenario="
+                      << (options.scenario == Scenario::kPutGet ? "put-get" : "full")
+                      << " pipeline=" << options.pipeline_depth
+                      << " ops_per_client=" << options.operations
+                      << " total_requests=" << total_requests
+                      << " wall_seconds=" << std::fixed << std::setprecision(4) << seconds
+                      << " aggregate_qps=" << std::setprecision(2) << aggregate_qps
+                      << '\n';
+        }
         return 0;
+    } catch (const std::invalid_argument& ex) {
+        PrintUsage();
+        std::cerr << "Benchmark error: " << ex.what() << '\n';
+        return 1;
     } catch (const std::exception& ex) {
         std::cerr << "Benchmark error: " << ex.what() << '\n';
         return 1;

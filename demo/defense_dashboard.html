@@ -1,0 +1,797 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KV-Store 毕业答辩展示面板</title>
+  <style>
+    :root {
+      --bg: #04131b;
+      --bg-soft: #0d202b;
+      --panel: rgba(8, 31, 40, 0.78);
+      --panel-strong: rgba(9, 38, 48, 0.94);
+      --line: rgba(91, 227, 211, 0.18);
+      --text: #eaf7f4;
+      --muted: #8ca7ab;
+      --cyan: #57e0d4;
+      --amber: #f6b756;
+      --red: #ff7869;
+      --lime: #8af29e;
+      --shadow: 0 30px 80px rgba(0, 0, 0, 0.35);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Segoe UI", "PingFang SC", "Noto Sans SC", sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at top left, rgba(87, 224, 212, 0.18), transparent 28%),
+        radial-gradient(circle at 85% 10%, rgba(246, 183, 86, 0.14), transparent 22%),
+        linear-gradient(180deg, #031018 0%, #051922 52%, #08131b 100%);
+      overflow-x: hidden;
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+      background-size: 48px 48px;
+      pointer-events: none;
+      opacity: 0.45;
+    }
+
+    .dashboard {
+      width: min(1500px, calc(100vw - 32px));
+      margin: 16px auto;
+      padding: 18px;
+      border: 1px solid rgba(135, 221, 219, 0.12);
+      border-radius: 26px;
+      background: linear-gradient(180deg, rgba(5, 26, 34, 0.92), rgba(3, 17, 22, 0.96));
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(18px);
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+      padding: 6px 4px 18px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .title-block h1 {
+      margin: 0;
+      font-size: clamp(28px, 4vw, 46px);
+      line-height: 1;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      font-weight: 800;
+    }
+
+    .title-block p {
+      margin: 10px 0 0;
+      color: var(--muted);
+      font-size: 14px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      justify-content: flex-end;
+    }
+
+    .mode-chip,
+    .action-button {
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.04);
+      color: var(--text);
+      padding: 10px 14px;
+      font-size: 13px;
+      letter-spacing: 0.04em;
+      cursor: pointer;
+      transition: 160ms ease;
+    }
+
+    .mode-chip.active,
+    .action-button.primary {
+      background: linear-gradient(135deg, rgba(87, 224, 212, 0.28), rgba(87, 224, 212, 0.12));
+      border-color: rgba(87, 224, 212, 0.42);
+      box-shadow: 0 0 0 1px rgba(87, 224, 212, 0.08) inset;
+    }
+
+    .mode-chip:hover,
+    .action-button:hover {
+      transform: translateY(-1px);
+      border-color: rgba(255, 255, 255, 0.18);
+    }
+
+    .main {
+      display: grid;
+      grid-template-columns: minmax(0, 1.85fr) minmax(320px, 0.95fr);
+      gap: 18px;
+      margin-top: 18px;
+    }
+
+    .panel {
+      background: linear-gradient(180deg, var(--panel-strong), var(--panel));
+      border: 1px solid rgba(136, 228, 220, 0.1);
+      border-radius: 22px;
+      padding: 16px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .panel::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent 30%);
+      pointer-events: none;
+    }
+
+    .panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+
+    .panel-header h2,
+    .panel-header h3 {
+      margin: 0;
+      font-size: 14px;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: #bfe8e3;
+    }
+
+    .panel-tag {
+      color: var(--amber);
+      font-size: 12px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+    }
+
+    .terminal-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .terminal-card {
+      min-height: 188px;
+      display: flex;
+      flex-direction: column;
+      border-radius: 18px;
+      background:
+        linear-gradient(180deg, rgba(8, 27, 36, 0.95), rgba(4, 16, 21, 0.94));
+      border: 1px solid rgba(135, 221, 219, 0.1);
+      overflow: hidden;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+    }
+
+    .terminal-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 12px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      background: rgba(255, 255, 255, 0.02);
+      font-size: 12px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .terminal-status {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.1);
+      box-shadow: 0 0 0 0 rgba(138, 242, 158, 0.35);
+      transition: 180ms ease;
+    }
+
+    .terminal-status.live {
+      background: var(--lime);
+      box-shadow: 0 0 18px rgba(138, 242, 158, 0.45);
+    }
+
+    .terminal-lines {
+      font-family: "Cascadia Code", "Fira Code", "Consolas", monospace;
+      font-size: 12px;
+      line-height: 1.55;
+      color: #d7f6ef;
+      padding: 12px;
+      height: 100%;
+      white-space: pre-wrap;
+      overflow: hidden;
+    }
+
+    .line {
+      opacity: 0;
+      transform: translateY(6px);
+      animation: rise 220ms ease forwards;
+    }
+
+    .line.command {
+      color: var(--cyan);
+    }
+
+    .line.response {
+      color: #f3f1da;
+    }
+
+    .line.system {
+      color: var(--amber);
+    }
+
+    .sidebar {
+      display: grid;
+      gap: 18px;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .stat-card {
+      padding: 14px;
+      border-radius: 18px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .stat-card span {
+      display: block;
+      font-size: 11px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .stat-card strong {
+      display: block;
+      margin-top: 8px;
+      font-size: clamp(24px, 3vw, 34px);
+      font-weight: 800;
+    }
+
+    .accent-cyan strong { color: var(--cyan); }
+    .accent-amber strong { color: var(--amber); }
+    .accent-red strong { color: var(--red); }
+    .accent-lime strong { color: var(--lime); }
+
+    .architecture-list,
+    .conclusion-list {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      display: grid;
+      gap: 10px;
+    }
+
+    .architecture-list li,
+    .conclusion-list li {
+      padding: 12px 14px;
+      border-radius: 16px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      color: #d6e8e5;
+      line-height: 1.5;
+    }
+
+    .bottom {
+      display: grid;
+      grid-template-columns: 1.15fr 0.85fr;
+      gap: 18px;
+      margin-top: 18px;
+    }
+
+    .chart-shell {
+      display: grid;
+      gap: 12px;
+    }
+
+    .bar-chart {
+      display: flex;
+      align-items: flex-end;
+      gap: 12px;
+      min-height: 220px;
+      padding: 16px 12px 10px;
+      border-radius: 18px;
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.025), rgba(255, 255, 255, 0.01));
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .bar-group {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .bar {
+      width: 100%;
+      border-radius: 14px 14px 6px 6px;
+      background: linear-gradient(180deg, rgba(87, 224, 212, 0.95), rgba(19, 132, 129, 0.35));
+      box-shadow: 0 16px 24px rgba(87, 224, 212, 0.16);
+      transition: height 220ms ease;
+      min-height: 10px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .bar::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.28), transparent 35%);
+    }
+
+    .bar-label {
+      font-size: 11px;
+      color: var(--muted);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      text-align: center;
+    }
+
+    .bar-value {
+      font-size: 12px;
+      color: #dff6f4;
+    }
+
+    .latency-chart {
+      position: relative;
+      min-height: 220px;
+      padding: 12px;
+      border-radius: 18px;
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.025), rgba(255, 255, 255, 0.01));
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    .client-progress {
+      display: grid;
+      gap: 10px;
+    }
+
+    .progress-row {
+      display: grid;
+      grid-template-columns: 88px 1fr 70px;
+      gap: 10px;
+      align-items: center;
+      font-size: 12px;
+      color: #d6ebe8;
+    }
+
+    .progress-track {
+      height: 12px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.06);
+      overflow: hidden;
+      position: relative;
+    }
+
+    .progress-fill {
+      height: 100%;
+      width: 0;
+      border-radius: inherit;
+      background: linear-gradient(90deg, rgba(246, 183, 86, 0.9), rgba(255, 120, 105, 0.86));
+      transition: width 180ms ease;
+    }
+
+    .footer-note {
+      margin-top: 16px;
+      color: var(--muted);
+      font-size: 12px;
+      letter-spacing: 0.05em;
+      text-align: right;
+    }
+
+    @keyframes rise {
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @media (max-width: 1180px) {
+      .main,
+      .bottom {
+        grid-template-columns: 1fr;
+      }
+
+      .terminal-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 760px) {
+      .dashboard {
+        width: calc(100vw - 16px);
+        margin: 8px auto;
+        padding: 12px;
+        border-radius: 18px;
+      }
+
+      .topbar {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .controls {
+        justify-content: flex-start;
+      }
+
+      .terminal-grid,
+      .stats-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="dashboard">
+    <div class="topbar">
+      <div class="title-block">
+        <h1>KV-Store 毕业答辩展示面板</h1>
+        <p>单线程 Reactor / 跳表索引 / WAL 持久化 / 文本协议 / 性能实验链路</p>
+      </div>
+      <div class="controls">
+        <button class="mode-chip active" data-mode="protocol">协议演示</button>
+        <button class="mode-chip" data-mode="pressure">并发演示</button>
+        <button class="mode-chip" data-mode="recovery">WAL 恢复</button>
+        <button class="action-button primary" id="startButton">开始演示</button>
+        <button class="action-button" id="resetButton">重置</button>
+      </div>
+    </div>
+
+    <div class="main">
+      <section class="panel">
+        <div class="panel-header">
+          <h2>客户端矩阵</h2>
+          <div class="panel-tag" id="modeTag">协议演示</div>
+        </div>
+        <div class="terminal-grid" id="terminalGrid"></div>
+      </section>
+
+      <aside class="sidebar">
+        <section class="panel">
+          <div class="panel-header">
+            <h3>系统脉冲</h3>
+            <div class="panel-tag" id="phaseTag">空闲</div>
+          </div>
+          <div class="stats-grid">
+            <div class="stat-card accent-cyan">
+              <span>展示吞吐</span>
+              <strong id="qpsValue">0</strong>
+            </div>
+            <div class="stat-card accent-amber">
+              <span>展示 P95</span>
+              <strong id="p95Value">0 us</strong>
+            </div>
+            <div class="stat-card accent-lime">
+              <span>活跃客户端</span>
+              <strong id="clientValue">0</strong>
+            </div>
+            <div class="stat-card accent-red">
+              <span>内存键数量</span>
+              <strong id="keyValue">0</strong>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-header">
+            <h3>系统结构速览</h3>
+          </div>
+          <ul class="architecture-list">
+            <li><strong>协议层</strong> 纯文本命令，支持 PING / PUT / GET / DEL / SCAN / QUIT</li>
+            <li><strong>核心网络</strong> 单线程 Reactor + 非阻塞 socket + epoll 事件循环</li>
+            <li><strong>存储引擎</strong> 跳表索引负责有序读写与范围扫描</li>
+            <li><strong>持久化</strong> WAL 先写日志再更新内存，支持重启恢复</li>
+          </ul>
+        </section>
+
+        <section class="panel">
+          <div class="panel-header">
+            <h3>答辩主张</h3>
+          </div>
+          <ul class="conclusion-list">
+            <li>主线版本保留单线程 Reactor，因为线程池实验出现端到端退化。</li>
+            <li>项目同时具备协议验证、交互客户端、benchmark 与对比实验链路。</li>
+            <li>展示重点不是“做了并发”，而是“做了实现并用实验验证取舍”。</li>
+            <li>页面中的动态 QPS 与延迟用于答辩展示，正式结论以 README 中的 benchmark 结果为准。</li>
+          </ul>
+        </section>
+      </aside>
+    </div>
+
+    <div class="bottom">
+      <section class="panel chart-shell">
+        <div class="panel-header">
+          <h3>吞吐展示图</h3>
+          <div class="panel-tag">展示节奏，不作正式实验引用</div>
+        </div>
+        <div class="bar-chart" id="barChart"></div>
+      </section>
+
+      <section class="panel chart-shell">
+        <div class="panel-header">
+          <h3>延迟与客户端负载</h3>
+          <div class="panel-tag">展示型动态指标</div>
+        </div>
+        <div class="latency-chart">
+          <canvas id="latencyCanvas" width="640" height="220"></canvas>
+        </div>
+        <div class="client-progress" id="clientProgress"></div>
+      </section>
+    </div>
+
+    <div class="footer-note">
+      当前为真实事件映射版。请先运行 <code>python3 demo/defense_demo_server.py</code>，再访问 <code>http://127.0.0.1:8765/defense_dashboard.html</code>。本页动态图表用于展示，不替代正式 benchmark 数据。
+    </div>
+  </div>
+
+  <script>
+    const modeConfigs = {
+      protocol: { label: "协议演示", phaseLabel: "协议链路", terminalCount: 6 },
+      pressure: { label: "并发演示", phaseLabel: "展示负载", terminalCount: 8 },
+      recovery: { label: "WAL 恢复", phaseLabel: "持久化证明", terminalCount: 6 }
+    };
+
+    const state = {
+      mode: "protocol",
+      terminalCount: 6,
+      latencySeries: Array.from({ length: 28 }, () => 0),
+      eventSource: null
+    };
+
+    const terminalGrid = document.getElementById("terminalGrid");
+    const barChart = document.getElementById("barChart");
+    const clientProgress = document.getElementById("clientProgress");
+    const modeTag = document.getElementById("modeTag");
+    const phaseTag = document.getElementById("phaseTag");
+    const qpsValue = document.getElementById("qpsValue");
+    const p95Value = document.getElementById("p95Value");
+    const clientValue = document.getElementById("clientValue");
+    const keyValue = document.getElementById("keyValue");
+    const canvas = document.getElementById("latencyCanvas");
+    const ctx = canvas.getContext("2d");
+
+    document.querySelectorAll(".mode-chip").forEach((button) => {
+      button.addEventListener("click", () => {
+        document.querySelectorAll(".mode-chip").forEach((chip) => chip.classList.remove("active"));
+        button.classList.add("active");
+        state.mode = button.dataset.mode;
+        resetView();
+      });
+    });
+
+    document.getElementById("startButton").addEventListener("click", async () => {
+      resetView();
+      await fetch("/api/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode: state.mode })
+      });
+    });
+
+    document.getElementById("resetButton").addEventListener("click", async () => {
+      await fetch("/api/reset", { method: "POST", headers: { "Content-Type": "application/json" } });
+      resetView();
+    });
+
+    function connectEvents() {
+      if (state.eventSource) {
+        state.eventSource.close();
+      }
+      state.eventSource = new EventSource("/api/events");
+      state.eventSource.onmessage = (event) => {
+        const payload = JSON.parse(event.data);
+        handleEvent(payload);
+      };
+    }
+
+    function resetView() {
+      state.terminalCount = modeConfigs[state.mode].terminalCount;
+      buildShell();
+      renderBars([0, 0, 0, 0]);
+      updateMetrics({ qps: 0, p95: 0, active: 0, keys: 0, progress: [], bars: [0, 0, 0, 0] });
+      state.latencySeries = Array.from({ length: 28 }, () => 0);
+      drawLatency();
+      modeTag.textContent = modeConfigs[state.mode].label;
+      phaseTag.textContent = "空闲";
+    }
+
+    function handleEvent(payload) {
+      if (payload.type === "ready") {
+        return;
+      }
+      if (payload.type === "mode") {
+        state.mode = payload.mode;
+        document.querySelectorAll(".mode-chip").forEach((chip) => {
+          chip.classList.toggle("active", chip.dataset.mode === payload.mode);
+        });
+        modeTag.textContent = modeConfigs[payload.mode].label;
+        return;
+      }
+      if (payload.type === "terminal_count") {
+        state.terminalCount = payload.count;
+        buildShell();
+        return;
+      }
+      if (payload.type === "reset") {
+        resetView();
+        return;
+      }
+      if (payload.type === "phase") {
+        phaseTag.textContent = payload.text;
+        return;
+      }
+      if (payload.type === "log") {
+        appendLine(payload.client, payload.kind, payload.text);
+        return;
+      }
+      if (payload.type === "metric") {
+        updateMetrics(payload);
+      }
+    }
+
+    function buildShell() {
+      terminalGrid.innerHTML = "";
+      clientProgress.innerHTML = "";
+      for (let index = 0; index < state.terminalCount; index += 1) {
+        const terminal = document.createElement("div");
+        terminal.className = "terminal-card";
+        terminal.innerHTML = `
+          <div class="terminal-top">
+            <span>client-${String(index + 1).padStart(2, "0")}</span>
+            <span class="terminal-status" id="status-${index}"></span>
+          </div>
+          <div class="terminal-lines" id="lines-${index}"></div>
+        `;
+        terminalGrid.appendChild(terminal);
+
+        const row = document.createElement("div");
+        row.className = "progress-row";
+        row.innerHTML = `
+          <span>client-${String(index + 1).padStart(2, "0")}</span>
+          <div class="progress-track"><div class="progress-fill" id="fill-${index}"></div></div>
+          <span id="fill-label-${index}">0%</span>
+        `;
+        clientProgress.appendChild(row);
+      }
+    }
+
+    function appendLine(clientIndex, type, text) {
+      const lines = document.getElementById(`lines-${clientIndex}`);
+      const status = document.getElementById(`status-${clientIndex}`);
+      if (!lines || !status) {
+        return;
+      }
+      status.classList.add("live");
+      const line = document.createElement("div");
+      line.className = `line ${type}`;
+      line.textContent = text;
+      lines.appendChild(line);
+      if (lines.childElementCount > 9) {
+        lines.removeChild(lines.firstChild);
+      }
+      lines.scrollTop = lines.scrollHeight;
+    }
+
+    function updateMetrics(frame) {
+      qpsValue.textContent = Math.round(frame.qps || 0).toLocaleString();
+      p95Value.textContent = `${Math.round(frame.p95 || 0)} us`;
+      clientValue.textContent = String(frame.active || 0);
+      keyValue.textContent = String(frame.keys || 0);
+      renderBars(frame.bars || [0, 0, 0, 0]);
+      renderProgress(frame.progress || []);
+      state.latencySeries.shift();
+      state.latencySeries.push(frame.p95 || 0);
+      drawLatency();
+    }
+
+    function renderBars(values) {
+      const labels = ["PUT", "GET", "SCAN", "辅助"];
+      const max = Math.max(...values, 1);
+      barChart.innerHTML = "";
+      values.forEach((value, index) => {
+        const group = document.createElement("div");
+        group.className = "bar-group";
+        const height = `${Math.max(10, (value / max) * 180)}px`;
+        group.innerHTML = `
+          <div class="bar-value">${Math.round(value)}</div>
+          <div class="bar" style="height:${height};"></div>
+          <div class="bar-label">${labels[index]}</div>
+        `;
+        barChart.appendChild(group);
+      });
+    }
+
+    function renderProgress(values) {
+      for (let index = 0; index < state.terminalCount; index += 1) {
+        const fill = document.getElementById(`fill-${index}`);
+        const label = document.getElementById(`fill-label-${index}`);
+        if (!fill || !label) {
+          continue;
+        }
+        const value = values[index] || 0;
+        fill.style.width = `${value}%`;
+        label.textContent = `${Math.round(value)}%`;
+      }
+    }
+
+    function drawLatency() {
+      const { width, height } = canvas;
+      ctx.clearRect(0, 0, width, height);
+      ctx.fillStyle = "rgba(255,255,255,0.02)";
+      ctx.fillRect(0, 0, width, height);
+
+      ctx.strokeStyle = "rgba(255,255,255,0.08)";
+      ctx.lineWidth = 1;
+      for (let index = 1; index < 4; index += 1) {
+        const y = (height / 4) * index;
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(width, y);
+        ctx.stroke();
+      }
+
+      const max = Math.max(...state.latencySeries, 100);
+      ctx.beginPath();
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = "#f6b756";
+      state.latencySeries.forEach((value, index) => {
+        const x = (width / (state.latencySeries.length - 1)) * index;
+        const y = height - ((value / max) * (height - 30)) - 10;
+        if (index === 0) {
+          ctx.moveTo(x, y);
+        } else {
+          ctx.lineTo(x, y);
+        }
+      });
+      ctx.stroke();
+
+      ctx.fillStyle = "rgba(246, 183, 86, 0.18)";
+      ctx.lineTo(width, height);
+      ctx.lineTo(0, height);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    resetView();
+    connectEvents();
+  </script>
+</body>
+</html>

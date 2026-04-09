@@ -1,10 +1,14 @@
 #include "kvstore/kvstore.hpp"
+#include "kvstore/SkipList.hpp"
 
 #include <chrono>
+#include <cerrno>
 #include <cstdio>
 #include <cstdlib>
+#include <functional>
 #include <iomanip>
 #include <iostream>
+#include <limits>
 #include <map>
 #include <mutex>
 #include <stdexcept>
@@ -66,6 +70,113 @@ struct MapStore {
 private:
     std::mutex mutex_;
     std::map<std::string, std::string> data_;
+};
+
+class ShardedMapStore {
+public:
+    explicit ShardedMapStore(std::size_t shard_count = 16)
+        : shards_(shard_count == 0 ? 1 : shard_count) {}
+
+    bool Put(const std::string& key, const std::string& value) {
+        Shard& shard = ShardFor(key);
+        std::lock_guard<std::mutex> lock(shard.mutex);
+        const auto result = shard.data.insert(std::make_pair(key, value));
+        if (!result.second) {
+            result.first->second = value;
+        }
+        return result.second;
+    }
+
+    bool Get(const std::string& key, std::string* value) {
+        Shard& shard = ShardFor(key);
+        std::lock_guard<std::mutex> lock(shard.mutex);
+        const auto iterator = shard.data.find(key);
+        if (iterator == shard.data.end()) {
+            return false;
+        }
+        if (value != nullptr) {
+            *value = iterator->second;
+        }
+        return true;
+    }
+
+    bool Delete(const std::string& key) {
+        Shard& shard = ShardFor(key);
+        std::lock_guard<std::mutex> lock(shard.mutex);
+        return shard.data.erase(key) > 0;
+    }
+
+    std::size_t Size() {
+        std::size_t total = 0;
+        for (Shard& shard : shards_) {
+            std::lock_guard<std::mutex> lock(shard.mutex);
+            total += shard.data.size();
+        }
+        return total;
+    }
+
+private:
+    struct Shard {
+        std::mutex mutex;
+        std::map<std::string, std::string> data;
+    };
+
+    Shard& ShardFor(const std::string& key) {
+        return shards_[ShardIndex(key)];
+    }
+
+    std::size_t ShardIndex(const std::string& key) const {
+        return hasher_(key) % shards_.size();
+    }
+
+    std::vector<Shard> shards_;
+    std::hash<std::string> hasher_;
+};
+
+class ShardedSkipListStore {
+public:
+    explicit ShardedSkipListStore(std::size_t shard_count = 16)
+        : shards_(shard_count == 0 ? 1 : shard_count) {
+        for (std::unique_ptr<kvstore::SkipList<std::string, std::string>>& shard : shards_) {
+            shard = std::make_unique<kvstore::SkipList<std::string, std::string>>();
+        }
+    }
+
+    bool Put(const std::string& key, const std::string& value) {
+        return ShardFor(key).Put(key, value);
+    }
+
+    bool Get(const std::string& key, std::string* value) {
+        return ShardFor(key).Get(key, value);
+    }
+
+    bool Delete(const std::string& key) {
+        return ShardFor(key).Delete(key);
+    }
+
+    std::size_t Size() {
+        std::size_t total = 0;
+        for (const std::unique_ptr<kvstore::SkipList<std::string, std::string>>& shard : shards_) {
+            total += shard->Size();
+        }
+        return total;
+    }
+
+private:
+    kvstore::SkipList<std::string, std::string>& ShardFor(const std::string& key) {
+        return *shards_[ShardIndex(key)];
+    }
+
+    const kvstore::SkipList<std::string, std::string>& ShardFor(const std::string& key) const {
+        return *shards_[ShardIndex(key)];
+    }
+
+    std::size_t ShardIndex(const std::string& key) const {
+        return hasher_(key) % shards_.size();
+    }
+
+    std::vector<std::unique_ptr<kvstore::SkipList<std::string, std::string>>> shards_;
+    std::hash<std::string> hasher_;
 };
 
 std::string TempWalPath(const std::string& name) {
@@ -236,6 +347,14 @@ std::size_t MapStoreSize(MapStore* store) {
     return store->Size();
 }
 
+std::size_t ShardedMapStoreSize(ShardedMapStore* store) {
+    return store->Size();
+}
+
+std::size_t ShardedSkipListStoreSize(ShardedSkipListStore* store) {
+    return store->Size();
+}
+
 void PrintHeader() {
     std::cout << std::left
               << std::setw(22) << "benchmark"
@@ -263,18 +382,61 @@ void PrintResult(const BenchmarkResult& result) {
               << '\n';
 }
 
+void PrintUsage() {
+    std::cerr << "Usage: ./bin/kvstore_compare_bench [ops_per_thread] [max_threads]"
+                 " [preload_keys>=0] [mixed|read|write]\n"
+                 "  ops_per_thread: operations executed by each thread (default 20000)\n"
+                 "  max_threads: maximum thread count in 1/2/4/... sweep (default 8)\n"
+                 "  preload_keys: keys inserted before the benchmark starts (default 0)\n"
+                 "  workload: mixed | read | write (default mixed)\n";
+}
+
+int ParsePositiveInt(const char* text, const char* field_name) {
+    char* end = nullptr;
+    errno = 0;
+    const long value = std::strtol(text, &end, 10);
+    if (errno != 0 || end == text || *end != '\0' || value <= 0 ||
+        value > std::numeric_limits<int>::max()) {
+        throw std::invalid_argument(std::string("invalid ") + field_name);
+    }
+    return static_cast<int>(value);
+}
+
+int ParseNonNegativeInt(const char* text, const char* field_name) {
+    char* end = nullptr;
+    errno = 0;
+    const long value = std::strtol(text, &end, 10);
+    if (errno != 0 || end == text || *end != '\0' || value < 0 ||
+        value > std::numeric_limits<int>::max()) {
+        throw std::invalid_argument(std::string("invalid ") + field_name);
+    }
+    return static_cast<int>(value);
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
-    const int operations_per_thread = argc > 1 ? std::stoi(argv[1]) : 20000;
-    const int max_threads = argc > 2 ? std::stoi(argv[2]) : 8;
-    const int preload_keys = argc > 3 ? std::stoi(argv[3]) : 0;
-    const WorkloadMode workload_mode =
-        argc > 4 ? ParseWorkloadMode(argv[4]) : WorkloadMode::kMixed;
+    if (argc > 1) {
+        const std::string first = argv[1];
+        if (first == "--help" || first == "-h") {
+            PrintUsage();
+            return 0;
+        }
+    }
 
-    if (operations_per_thread <= 0 || max_threads <= 0 || preload_keys < 0) {
-        std::cerr << "Usage: ./bin/kvstore_compare_bench [ops_per_thread] [max_threads]"
-                  << " [preload_keys>=0] [mixed|read|write]\n";
+    int operations_per_thread = 20000;
+    int max_threads = 8;
+    int preload_keys = 0;
+    WorkloadMode workload_mode = WorkloadMode::kMixed;
+
+    try {
+        operations_per_thread = argc > 1 ? ParsePositiveInt(argv[1], "ops per thread") : 20000;
+        max_threads = argc > 2 ? ParsePositiveInt(argv[2], "max threads") : 8;
+        preload_keys = argc > 3 ? ParseNonNegativeInt(argv[3], "preload keys") : 0;
+        workload_mode = argc > 4 ? ParseWorkloadMode(argv[4]) : WorkloadMode::kMixed;
+    } catch (const std::invalid_argument& ex) {
+        PrintUsage();
+        std::cerr << "Compare benchmark error: " << ex.what() << '\n';
         return 1;
     }
 
@@ -337,6 +499,30 @@ int main(int argc, char** argv) {
                                      preload_keys,
                                      workload_mode,
                                      &MapStoreSize));
+        }
+
+        {
+            ShardedMapStore store;
+            PreloadStore(&store, preload_keys);
+            PrintResult(RunBenchmark("std_map_sharded",
+                                     &store,
+                                     thread_count,
+                                     operations_per_thread,
+                                     preload_keys,
+                                     workload_mode,
+                                     &ShardedMapStoreSize));
+        }
+
+        {
+            ShardedSkipListStore store;
+            PreloadStore(&store, preload_keys);
+            PrintResult(RunBenchmark("skiplist_sharded",
+                                     &store,
+                                     thread_count,
+                                     operations_per_thread,
+                                     preload_keys,
+                                     workload_mode,
+                                     &ShardedSkipListStoreSize));
         }
     }
 
