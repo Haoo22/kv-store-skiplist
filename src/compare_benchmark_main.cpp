@@ -1,5 +1,6 @@
 #include "kvstore/kvstore.hpp"
 #include "kvstore/SkipList.hpp"
+#include "kvstore/WAL.hpp"
 
 #include <chrono>
 #include <cerrno>
@@ -179,6 +180,43 @@ private:
     std::hash<std::string> hasher_;
 };
 
+template <typename Store>
+class WalBackedStore {
+public:
+    WalBackedStore(std::string wal_path, int wal_sync_interval_ms = 10)
+        : wal_(std::move(wal_path), wal_sync_interval_ms) {
+        wal_.Replay([this](const kvstore::LogRecord& record) {
+            if (record.type == kvstore::RecordType::kPut) {
+                static_cast<void>(store_.Put(record.key, record.value));
+                return;
+            }
+            static_cast<void>(store_.Delete(record.key));
+        });
+    }
+
+    bool Put(const std::string& key, const std::string& value) {
+        wal_.AppendPut(key, value);
+        return store_.Put(key, value);
+    }
+
+    bool Get(const std::string& key, std::string* value) {
+        return store_.Get(key, value);
+    }
+
+    bool Delete(const std::string& key) {
+        wal_.AppendDelete(key);
+        return store_.Delete(key);
+    }
+
+    std::size_t Size() {
+        return store_.Size();
+    }
+
+private:
+    Store store_;
+    kvstore::WAL wal_;
+};
+
 std::string TempWalPath(const std::string& name) {
     return "/tmp/kvstore-bench/" + name;
 }
@@ -355,6 +393,11 @@ std::size_t ShardedSkipListStoreSize(ShardedSkipListStore* store) {
     return store->Size();
 }
 
+template <typename Store>
+std::size_t WalBackedStoreSize(WalBackedStore<Store>* store) {
+    return store->Size();
+}
+
 void PrintHeader() {
     std::cout << std::left
               << std::setw(22) << "benchmark"
@@ -502,6 +545,22 @@ int main(int argc, char** argv) {
         }
 
         {
+            const std::string wal_path =
+                TempWalPath("compare-std-map-mutex-wal-" + std::to_string(thread_count) + ".log");
+            RemoveFileIfExists(wal_path);
+            WalBackedStore<MapStore> store(wal_path, 10);
+            PreloadStore(&store, preload_keys);
+            PrintResult(RunBenchmark("std_map_mutex_wal",
+                                     &store,
+                                     thread_count,
+                                     operations_per_thread,
+                                     preload_keys,
+                                     workload_mode,
+                                     &WalBackedStoreSize<MapStore>));
+            RemoveFileIfExists(wal_path);
+        }
+
+        {
             ShardedMapStore store;
             PreloadStore(&store, preload_keys);
             PrintResult(RunBenchmark("std_map_sharded",
@@ -514,6 +573,22 @@ int main(int argc, char** argv) {
         }
 
         {
+            const std::string wal_path = TempWalPath("compare-std-map-sharded-wal-" +
+                                                     std::to_string(thread_count) + ".log");
+            RemoveFileIfExists(wal_path);
+            WalBackedStore<ShardedMapStore> store(wal_path, 10);
+            PreloadStore(&store, preload_keys);
+            PrintResult(RunBenchmark("std_map_sharded_wal",
+                                     &store,
+                                     thread_count,
+                                     operations_per_thread,
+                                     preload_keys,
+                                     workload_mode,
+                                     &WalBackedStoreSize<ShardedMapStore>));
+            RemoveFileIfExists(wal_path);
+        }
+
+        {
             ShardedSkipListStore store;
             PreloadStore(&store, preload_keys);
             PrintResult(RunBenchmark("skiplist_sharded",
@@ -523,6 +598,22 @@ int main(int argc, char** argv) {
                                      preload_keys,
                                      workload_mode,
                                      &ShardedSkipListStoreSize));
+        }
+
+        {
+            const std::string wal_path = TempWalPath("compare-skiplist-sharded-wal-" +
+                                                     std::to_string(thread_count) + ".log");
+            RemoveFileIfExists(wal_path);
+            WalBackedStore<ShardedSkipListStore> store(wal_path, 10);
+            PreloadStore(&store, preload_keys);
+            PrintResult(RunBenchmark("skiplist_sharded_wal",
+                                     &store,
+                                     thread_count,
+                                     operations_per_thread,
+                                     preload_keys,
+                                     workload_mode,
+                                     &WalBackedStoreSize<ShardedSkipListStore>));
+            RemoveFileIfExists(wal_path);
         }
     }
 

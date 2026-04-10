@@ -88,7 +88,17 @@ clients=4 scenario=put-get pipeline=8 ops_per_client=500 total_requests=4000 wal
 - 对比 `kvstore_no_wal`
 - 对比 `kvstore_with_wal`
 - 对比 `std_map_mutex`
+- 对比 `std_map_mutex_wal`
+- 对比 `std_map_sharded`
+- 对比 `std_map_sharded_wal`
 - 对比 `skiplist_sharded` 这种“通过 key 分片提升锁粒度”的实验版本
+- 对比 `skiplist_sharded_wal`
+
+当前实现边界：
+
+- `skiplist_sharded`、`std_map_sharded` 及其 `*_wal` 版本，都是进程内实验性对照，不是主线服务端结构
+- 其中 `*_wal` 使用的是 compare benchmark 内部补充的实验性 WAL 包装，不等于主线服务端已经切换到该实现
+- 因此带 WAL 的结论可以用于回答“索引结构在追加日志开销下的相对表现”，但不应和主线网络 benchmark 直接混写
 
 ## 4. 推荐实验引用方式
 
@@ -241,7 +251,34 @@ WAL recovery verification passed
 - 一旦把 key 分散到多个跳表分片，读多写少场景下吞吐会明显上升
 - 按当前答辩主比较口径，`skiplist_sharded` 已经明显超过 `std_map_mutex`
 
-### 8.4 补充对照：`std_map_sharded`
+### 8.4 WAL 补测：`std_map_mutex_wal` vs `skiplist_sharded_wal`
+
+为补齐“带 WAL 后还能不能保持优势”这个问题，当前在 compare benchmark 中增加了实验性 WAL 包装对照项：
+
+- `std_map_mutex_wal`
+- `skiplist_sharded_wal`
+
+命令：
+
+```text
+./bin/kvstore_compare_bench 5000 8 100000 read
+./bin/kvstore_compare_bench 5000 8 300000 read
+```
+
+关注 `8` 线程结果：
+
+| preload | `std_map_mutex_wal` | `skiplist_sharded_wal` | 提升倍数 |
+| --- | ---: | ---: | ---: |
+| `100000` | `482484.93 ops/s` | `854925.36 ops/s` | `1.77x` |
+| `300000` | `416153.30 ops/s` | `917692.71 ops/s` | `2.21x` |
+
+当前判断：
+
+- 在这组进程内 WAL 对照里，`skiplist_sharded_wal` 也已经超过 `std_map_mutex_wal`
+- 这说明加上 WAL 之后，细粒度锁跳表相对原版红黑树基线的优势仍然成立
+- 但这组结果仍然属于 compare benchmark 的实验性 WAL 包装对照，不应直接写成主线网络服务端结论
+
+### 8.5 补充对照：`std_map_sharded`
 
 为了区分“数据结构收益”和“锁粒度收益”，当前程序中还保留了一个补充对照：
 

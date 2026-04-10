@@ -10,12 +10,15 @@
 - [tests/test_main.cpp](/home/haoo/code/study/KV-Store/tests/test_main.cpp)
 - [scripts/run_network_bench.sh](/home/haoo/code/study/KV-Store/scripts/run_network_bench.sh)
 - [scripts/run_compare_bench.sh](/home/haoo/code/study/KV-Store/scripts/run_compare_bench.sh)
+- [scripts/verify_protocol_regression.sh](/home/haoo/code/study/KV-Store/scripts/verify_protocol_regression.sh)
 - [scripts/verify_wal_recovery.sh](/home/haoo/code/study/KV-Store/scripts/verify_wal_recovery.sh)
+- [scripts/verify_demo_http.sh](/home/haoo/code/study/KV-Store/scripts/verify_demo_http.sh)
 - [README.md](/home/haoo/code/study/KV-Store/README.md)
 
 ## 2. 建议提交
 
 - [docs/thesis_materials.md](/home/haoo/code/study/KV-Store/docs/thesis_materials.md)
+- [docs/final_benchmark_summary.md](/home/haoo/code/study/KV-Store/docs/final_benchmark_summary.md)
 - [docs/benchmark_methodology.md](/home/haoo/code/study/KV-Store/docs/benchmark_methodology.md)
 - [docs/system_architecture.md](/home/haoo/code/study/KV-Store/docs/system_architecture.md)
 - [docs/request_flow.md](/home/haoo/code/study/KV-Store/docs/request_flow.md)

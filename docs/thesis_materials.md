@@ -50,6 +50,8 @@
 - `kvstore_with_wal`
 - `std_map_mutex`
 - `skiplist_sharded`
+- `std_map_mutex_wal`
+- `skiplist_sharded_wal`
 
 ### 3.4 反例分析
 
@@ -82,6 +84,7 @@
 - 当前主线已经达到“完整闭环、恢复能力、多客户端接入、正式 benchmark 链路”这几个核心预期
 - 当前主线尚不能写成“多线程并行主线”
 - 如果按答辩主比较口径使用“细粒度锁跳表 `skiplist_sharded` vs 原版红黑树基线 `std_map_mutex`”，当前跳表实验版已经明显占优
+- 即使补上 compare benchmark 中的实验性 WAL 包装对照，`skiplist_sharded_wal` 也已经超过 `std_map_mutex_wal`
 - 但这不应扩写成“跳表已经优于所有分片化 `std::map` 实现”
 
 ## 6. 写作时应避免的表述

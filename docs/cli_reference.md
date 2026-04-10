@@ -109,10 +109,16 @@ KVStore single-thread Reactor server listening on 0.0.0.0:6380, WAL enabled, pat
 - 对比 `kvstore_no_wal`
 - 对比 `kvstore_with_wal`
 - 对比 `std_map_mutex`
+- 对比 `std_map_mutex_wal`
 - 对比 `skiplist_sharded`
+- 对比 `skiplist_sharded_wal`
 - 对比 `std_map_sharded`
+- 对比 `std_map_sharded_wal`
 
-该工具不经过网络协议层，适合观察数据结构和持久化路径对性能的影响。
+说明：
+
+- `*_wal` 是 compare benchmark 内部补充的实验性 WAL 包装对照
+- 该工具不经过网络协议层，适合观察数据结构和持久化路径对性能的影响。
 
 ## 5. 脚本入口
 
@@ -185,6 +191,57 @@ KVStore single-thread Reactor server listening on 0.0.0.0:6380, WAL enabled, pat
 
 - 在当前 Codex 沙箱中，本地 TCP 连接可能受限
 - 如果出现 `Operation not permitted`，应在本地终端或沙箱外执行该脚本
+
+### 5.4 `verify_protocol_regression.sh`
+
+命令：
+
+```bash
+./scripts/verify_protocol_regression.sh
+./scripts/verify_protocol_regression.sh --help
+```
+
+用途：
+
+- 启动 `--no-wal` 服务端
+- 运行 `kvstore_bench ... full`
+- 验证 `PING/PUT/GET/SCAN/DEL/QUIT` 主链路
+
+可覆盖环境变量：
+
+- `HOST`
+- `PORT`
+- `OPERATIONS`
+- `PIPELINE_DEPTH`
+
+注意：
+
+- 在当前 Codex 沙箱中，本地 TCP 连接可能受限
+- 如果出现 `Operation not permitted`，应在本地终端或沙箱外执行该脚本
+
+### 5.5 `verify_demo_http.sh`
+
+命令：
+
+```bash
+./scripts/verify_demo_http.sh
+./scripts/verify_demo_http.sh --help
+```
+
+用途：
+
+- 启动答辩 demo HTTP 服务
+- 访问 `defense_dashboard.html`
+- 验证页面内容已正常提供
+
+可覆盖环境变量：
+
+- `HOST`
+- `PORT`
+
+注意：
+
+- 脚本内部会使用 `curl --noproxy '*'`，避免本机代理变量干扰本地回环访问
 
 ## 6. 工具边界
 

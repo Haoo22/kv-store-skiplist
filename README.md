@@ -26,6 +26,7 @@
 推荐先看：
 
 - 论文支撑摘要：[thesis_materials.md](/home/haoo/code/study/KV-Store/docs/thesis_materials.md)
+- 最终数据对照总表：[final_benchmark_summary.md](/home/haoo/code/study/KV-Store/docs/final_benchmark_summary.md)
 - Benchmark 方法说明：[benchmark_methodology.md](/home/haoo/code/study/KV-Store/docs/benchmark_methodology.md)
 - 系统架构说明：[system_architecture.md](/home/haoo/code/study/KV-Store/docs/system_architecture.md)
 - 请求处理流程：[request_flow.md](/home/haoo/code/study/KV-Store/docs/request_flow.md)
@@ -46,6 +47,7 @@ KV-Store/
 │   ├── defense_talk_track.md
 │   ├── demo_usage.md
 │   ├── experiment_classification.md
+│   ├── final_benchmark_summary.md
 │   ├── figure_materials.md
 │   ├── module_overview.md
 │   ├── protocol_reference.md
@@ -120,9 +122,11 @@ cmake --build build -j
 ./bin/kvstore_client --help
 ./bin/kvstore_bench --help
 ./bin/kvstore_compare_bench --help
+./scripts/verify_protocol_regression.sh --help
 ./scripts/run_network_bench.sh --help
 ./scripts/run_compare_bench.sh --help
 ./scripts/verify_wal_recovery.sh --help
+./scripts/verify_demo_http.sh --help
 ```
 
 完整参数见 [cli_reference.md](/home/haoo/code/study/KV-Store/docs/cli_reference.md)。
@@ -132,11 +136,12 @@ cmake --build build -j
 | 类型 | 命令 | 用途 |
 | --- | --- | --- |
 | 单元/集成测试 | `ctest --test-dir build --output-on-failure` | 验证跳表、WAL、协议与基础正确性 |
-| 协议回归 | `./bin/kvstore_bench 127.0.0.1 6380 20 1 full` | 验证 `PING/PUT/GET/SCAN/DEL/QUIT` 主链路 |
+| 协议回归 | `./scripts/verify_protocol_regression.sh` | 启动服务端并验证 `PING/PUT/GET/SCAN/DEL/QUIT` 主链路 |
 | WAL 恢复 | `./scripts/verify_wal_recovery.sh` | 端到端验证重启恢复 |
 | 网络 benchmark | `./bin/kvstore_bench ...` | 测串行、pipeline、多客户端 aggregate QPS |
 | 进程内对比 | `./bin/kvstore_compare_bench ...` | 测不同结构和锁策略 |
-| Demo | `python3 demo/defense_demo_server.py` | 答辩展示，不作为正式性能结论 |
+| Demo 可达性 | `./scripts/verify_demo_http.sh` | 验证答辩展示页面可访问 |
+| Demo 展示 | `python3 demo/defense_demo_server.py` | 答辩展示，不作为正式性能结论 |
 
 验证工作流见 [validation_workflow.md](/home/haoo/code/study/KV-Store/docs/validation_workflow.md)。
 
@@ -196,12 +201,16 @@ BYE
 - `kvstore_no_wal`
 - `kvstore_with_wal`
 - `std_map_mutex`
+- `std_map_mutex_wal`
 - `skiplist_sharded`
+- `skiplist_sharded_wal`
 - `std_map_sharded`
+- `std_map_sharded_wal`
 
 其中：
 
 - `skiplist_sharded` 是答辩阶段用于验证“细粒度锁跳表”的实验版本
+- `*_wal` 系列是 compare benchmark 中的实验性 WAL 包装对照，不代表主线服务端结构
 - `std_map_sharded` 是更公平的补充对照，不作为答辩主比较口径
 
 ## 7. 答辩版实验结果
@@ -239,6 +248,7 @@ BYE
 
 - `read` workload 为 `90% GET, 10% PUT`
 - 这组测试更接近“先有稳定数据规模，再做读多写少访问”的场景
+- 这组结果来自不带 WAL 的进程内对比
 
 结果：
 
@@ -252,7 +262,34 @@ BYE
 - 原版整表锁跳表没有发挥出并发潜力
 - 当锁粒度下沉到分片级之后，跳表在读多写少、稳定数据规模场景下可以明显超过原版 `std::map + mutex` 基线
 
-### 7.3 主线网络 benchmark
+### 7.3 WAL 补测：细粒度锁跳表 vs 原版红黑树基线
+
+为了回答“带 WAL 之后还能不能保持这个优势”，当前在 `kvstore_compare_bench` 中补充了实验性 WAL 包装对照：
+
+- `std_map_mutex_wal`
+- `skiplist_sharded_wal`
+
+测试命令：
+
+```bash
+./bin/kvstore_compare_bench 5000 8 100000 read
+./bin/kvstore_compare_bench 5000 8 300000 read
+```
+
+关注 `8` 线程结果：
+
+| preload | `std_map_mutex_wal` | `skiplist_sharded_wal` | 提升倍数 |
+| --- | ---: | ---: | ---: |
+| `100000` | `482484.93 ops/s` | `854925.36 ops/s` | `1.77x` |
+| `300000` | `416153.30 ops/s` | `917692.71 ops/s` | `2.21x` |
+
+当前可支持的说法是：
+
+- 在这组 compare benchmark 的实验性 WAL 包装对照里，`skiplist_sharded_wal` 也已经超过 `std_map_mutex_wal`
+- 这说明加上 WAL 后，细粒度锁跳表相对原版红黑树基线的优势仍然存在
+- 但这组结果仍然是进程内实验，不应和主线网络 benchmark 混写
+
+### 7.4 主线网络 benchmark
 
 当前主线服务端仍然是单线程 Reactor。代表性结果如下：
 
@@ -265,7 +302,7 @@ BYE
 | `with-wal` pipeline | `./bin/kvstore_bench 127.0.0.1 6380 5000 64` | `PUT 69097.99 ops/s` `GET 371471.03 ops/s` |
 | `with-wal` 多客户端 | `./bin/kvstore_bench 127.0.0.1 6380 500 8 put-get 8` | `aggregate_qps=98319.75` |
 
-### 7.4 恢复能力补验
+### 7.5 恢复能力补验
 
 ```bash
 ./scripts/verify_wal_recovery.sh
@@ -308,6 +345,7 @@ http://127.0.0.1:8765/defense_dashboard.html
 
 ## 10. 文档入口
 
+- 最终数据对照总表：[final_benchmark_summary.md](/home/haoo/code/study/KV-Store/docs/final_benchmark_summary.md)
 - Benchmark 方法说明：[benchmark_methodology.md](/home/haoo/code/study/KV-Store/docs/benchmark_methodology.md)
 - 论文支撑摘要：[thesis_materials.md](/home/haoo/code/study/KV-Store/docs/thesis_materials.md)
 - 答辩讲述提纲：[defense_talk_track.md](/home/haoo/code/study/KV-Store/docs/defense_talk_track.md)

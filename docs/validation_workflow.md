@@ -9,7 +9,8 @@
 3. 跑协议回归
 4. 跑 WAL 恢复验证
 5. 跑正式 benchmark
-6. 最后准备答辩 demo
+6. 验证 demo 页面可达性
+7. 最后准备答辩 demo
 
 ## 2. 基础编译
 
@@ -31,8 +32,7 @@ ctest --test-dir build --output-on-failure
 ## 4. 协议回归
 
 ```bash
-./bin/kvstore_server --no-wal
-./bin/kvstore_bench 127.0.0.1 6380 20 1 full
+./scripts/verify_protocol_regression.sh
 ```
 
 用途：
@@ -100,7 +100,22 @@ ctest --test-dir build --output-on-failure
 
 - 这是当前论文中可引用的正式实验数据来源
 
-## 7. 答辩展示
+## 7. Demo 页面可达性
+
+```bash
+./scripts/verify_demo_http.sh
+```
+
+用途：
+
+- 启动 demo HTTP 服务并拉取页面
+- 验证答辩展示静态页可访问
+
+说明：
+
+- 脚本内部会绕过本机代理，避免 `127.0.0.1` 访问被代理变量劫持
+
+## 8. 答辩展示
 
 ```bash
 python3 demo/defense_demo_server.py

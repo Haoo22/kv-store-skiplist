@@ -8,10 +8,11 @@
 | --- | --- | --- | --- |
 | 单元/集成测试 | `ctest --test-dir build --output-on-failure` | 验证基础正确性 | 否 |
 | 协议冒烟测试 | `kvstore_client` | 手工检查命令可用性 | 否 |
-| 协议回归测试 | `kvstore_bench ... full` | 脚本化验证完整协议主链路 | 否 |
+| 协议回归测试 | `verify_protocol_regression.sh` | 脚本化验证完整协议主链路 | 否 |
 | 外部协议验证 | `packetsender` | 使用独立 CLI 验证 TCP 文本协议 | 否 |
 | 正式网络 benchmark | `kvstore_bench` `run_network_bench.sh` | 测单客户端吞吐、pipeline 上限、多客户端 aggregate QPS | 是 |
 | 进程内对比压测 | `kvstore_compare_bench` `run_compare_bench.sh` | 对比不同存储结构和持久化路径 | 是 |
+| Demo 可达性验证 | `verify_demo_http.sh` | 验证答辩展示页面可访问 | 否 |
 | 答辩展示 demo | `demo/defense_demo_server.py` | 可视化展示真实事件与实验结论 | 否 |
 
 ## 2. 单元/集成测试
@@ -42,7 +43,7 @@ ctest --test-dir build --output-on-failure
 命令：
 
 ```bash
-./bin/kvstore_bench 127.0.0.1 6380 20 1 full
+./scripts/verify_protocol_regression.sh
 ```
 
 作用：
@@ -103,16 +104,35 @@ packetsender -A -t -4 -w 1000 127.0.0.1 6380 $'COMMAND\r\n'
 - 对比 `kvstore_no_wal`
 - 对比 `kvstore_with_wal`
 - 对比 `std_map_mutex`
+- 对比 `std_map_mutex_wal`
 - 对比 `skiplist_sharded`
+- 对比 `skiplist_sharded_wal`
 - 对比 `std_map_sharded`
+- 对比 `std_map_sharded_wal`
 
 说明：
 
 - `kvstore_compare_bench` 是底层正式工具
 - `run_compare_bench.sh` 是包装脚本，适合批量输出或保存结果
+- `*_wal` 是 compare benchmark 内部补充的实验性 WAL 包装对照
 - 参数细节见 [cli_reference.md](/home/haoo/code/study/KV-Store/docs/cli_reference.md)
 
 ## 5. 答辩展示 demo
+
+### 5.1 页面可达性验证
+
+命令：
+
+```bash
+./scripts/verify_demo_http.sh
+```
+
+作用：
+
+- 启动 demo HTTP 服务并拉取页面
+- 避免页面资源损坏或本机代理影响回环访问
+
+### 5.2 正式展示
 
 命令：
 

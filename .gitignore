@@ -1,6 +1,7 @@
 /build/
 /compile_commands.json
 /data/
+/.codex
 
 /bin/*
 !/bin/.gitkeep
