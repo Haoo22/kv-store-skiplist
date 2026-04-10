@@ -5,7 +5,7 @@
 使用原则：
 
 - 正式性能结论优先引用本文档
-- 更完整的方法说明见 [benchmark_methodology.md](/home/haoo/code/study/KV-Store/docs/benchmark_methodology.md)
+- 更完整的方法说明见 [benchmark_methodology.md](../docs/benchmark_methodology.md)
 - 如果需要追溯实验设计和背景，再回到对应方法文档
 
 ## 1. 主线网络 benchmark

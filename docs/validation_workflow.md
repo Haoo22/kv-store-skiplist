@@ -39,7 +39,7 @@ ctest --test-dir build --output-on-failure
 
 - 验证 `PING/PUT/GET/SCAN/DEL/QUIT` 主链路
 
-协议格式与响应语义见 [protocol_reference.md](/home/haoo/code/study/KV-Store/docs/protocol_reference.md)。
+协议格式与响应语义见 [protocol_reference.md](../docs/protocol_reference.md)。
 
 ## 5. WAL 恢复验证
 
@@ -58,7 +58,7 @@ ctest --test-dir build --output-on-failure
 - 重新启动服务端
 - 验证重启后仍能读回 key
 
-详细说明见 [wal_recovery_validation.md](/home/haoo/code/study/KV-Store/docs/wal_recovery_validation.md)。
+详细说明见 [wal_recovery_validation.md](../docs/wal_recovery_validation.md)。
 
 当前状态：
 
@@ -80,7 +80,7 @@ ctest --test-dir build --output-on-failure
 - `kvstore_bench` 适合单条命令精确控制参数
 - `run_network_bench.sh` 适合批量执行一组网络 benchmark
 - 若需要查看脚本支持的环境变量，可执行 `./scripts/run_network_bench.sh --help`
-- 完整 CLI 参数说明见 [cli_reference.md](/home/haoo/code/study/KV-Store/docs/cli_reference.md)
+- 完整 CLI 参数说明见 [cli_reference.md](../docs/cli_reference.md)
 
 进程内对比：
 
@@ -94,7 +94,7 @@ ctest --test-dir build --output-on-failure
 - `kvstore_compare_bench` 适合精确控制线程数、预加载规模和 workload
 - `run_compare_bench.sh` 适合批量执行并导出结果
 - 若需要查看脚本支持的环境变量，可执行 `./scripts/run_compare_bench.sh --help`
-- 完整 CLI 参数说明见 [cli_reference.md](/home/haoo/code/study/KV-Store/docs/cli_reference.md)
+- 完整 CLI 参数说明见 [cli_reference.md](../docs/cli_reference.md)
 
 用途：
 

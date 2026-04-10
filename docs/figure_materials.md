@@ -6,7 +6,7 @@
 
 建议来源：
 
-- [system_architecture.md](/home/haoo/code/study/KV-Store/docs/system_architecture.md)
+- [system_architecture.md](../docs/system_architecture.md)
 
 适合画成：
 
@@ -25,8 +25,8 @@
 
 建议来源：
 
-- [request_flow.md](/home/haoo/code/study/KV-Store/docs/request_flow.md)
-- [protocol_reference.md](/home/haoo/code/study/KV-Store/docs/protocol_reference.md)
+- [request_flow.md](../docs/request_flow.md)
+- [protocol_reference.md](../docs/protocol_reference.md)
 
 适合画成：
 
@@ -43,7 +43,7 @@
 
 建议来源：
 
-- [module_overview.md](/home/haoo/code/study/KV-Store/docs/module_overview.md)
+- [module_overview.md](../docs/module_overview.md)
 
 适合画成：
 
@@ -63,7 +63,7 @@
 
 建议来源：
 
-- [experiment_classification.md](/home/haoo/code/study/KV-Store/docs/experiment_classification.md)
+- [experiment_classification.md](../docs/experiment_classification.md)
 
 适合画成：
 
@@ -81,7 +81,7 @@
 
 建议来源：
 
-- [benchmark_methodology.md](/home/haoo/code/study/KV-Store/docs/benchmark_methodology.md)
+- [benchmark_methodology.md](../docs/benchmark_methodology.md)
 
 适合画成：
 
@@ -99,8 +99,8 @@
 
 建议来源：
 
-- [thread_pool_findings.md](/home/haoo/code/study/KV-Store/docs/thread_pool_findings.md)
-- [development_log_index.md](/home/haoo/code/study/KV-Store/docs/development_log_index.md)
+- [thread_pool_findings.md](../docs/thread_pool_findings.md)
+- [development_log_index.md](../docs/development_log_index.md)
 
 适合画成：
 
@@ -116,8 +116,8 @@
 
 建议来源：
 
-- [demo_usage.md](/home/haoo/code/study/KV-Store/docs/demo_usage.md)
-- [defense_dashboard.html](/home/haoo/code/study/KV-Store/demo/defense_dashboard.html)
+- [demo_usage.md](../docs/demo_usage.md)
+- [defense_dashboard.html](../demo/defense_dashboard.html)
 
 适合画成：
 
@@ -132,5 +132,5 @@
 ## 8. 当前使用建议
 
 - 论文正文：优先引用本文件列出的独立文档
-- 论文附录：再回到 [README.md](/home/haoo/code/study/KV-Store/README.md) 的开发日志
+- 论文附录：再回到 [README.md](../README.md) 的开发日志
 - 答辩 PPT：优先使用结构图、实验分类表、线程池反例总结表、demo 页面截图

@@ -30,9 +30,9 @@
 
 文件：
 
-- [SkipList.hpp](/home/haoo/code/study/KV-Store/include/kvstore/SkipList.hpp)
-- [kvstore.hpp](/home/haoo/code/study/KV-Store/include/kvstore/kvstore.hpp)
-- [kvstore.cpp](/home/haoo/code/study/KV-Store/src/kvstore.cpp)
+- [SkipList.hpp](../include/kvstore/SkipList.hpp)
+- [kvstore.hpp](../include/kvstore/kvstore.hpp)
+- [kvstore.cpp](../src/kvstore.cpp)
 
 职责：
 
@@ -44,8 +44,8 @@
 
 文件：
 
-- [WAL.hpp](/home/haoo/code/study/KV-Store/include/kvstore/WAL.hpp)
-- [WAL.cpp](/home/haoo/code/study/KV-Store/src/WAL.cpp)
+- [WAL.hpp](../include/kvstore/WAL.hpp)
+- [WAL.cpp](../src/WAL.cpp)
 
 职责：
 
@@ -57,12 +57,12 @@
 
 文件：
 
-- [Server.hpp](/home/haoo/code/study/KV-Store/include/kvstore/Server.hpp)
-- [Server.cpp](/home/haoo/code/study/KV-Store/src/Server.cpp)
-- [Protocol.hpp](/home/haoo/code/study/KV-Store/include/kvstore/Protocol.hpp)
-- [Protocol.cpp](/home/haoo/code/study/KV-Store/src/Protocol.cpp)
-- [server_main.cpp](/home/haoo/code/study/KV-Store/src/server_main.cpp)
-- [client_main.cpp](/home/haoo/code/study/KV-Store/src/client_main.cpp)
+- [Server.hpp](../include/kvstore/Server.hpp)
+- [Server.cpp](../src/Server.cpp)
+- [Protocol.hpp](../include/kvstore/Protocol.hpp)
+- [Protocol.cpp](../src/Protocol.cpp)
+- [server_main.cpp](../src/server_main.cpp)
+- [client_main.cpp](../src/client_main.cpp)
 
 职责：
 
@@ -72,18 +72,18 @@
 
 补充材料：
 
-- [protocol_reference.md](/home/haoo/code/study/KV-Store/docs/protocol_reference.md)
-- [cli_reference.md](/home/haoo/code/study/KV-Store/docs/cli_reference.md)
+- [protocol_reference.md](../docs/protocol_reference.md)
+- [cli_reference.md](../docs/cli_reference.md)
 
 ### 2.4 实验与验证层
 
 文件：
 
-- [benchmark_main.cpp](/home/haoo/code/study/KV-Store/src/benchmark_main.cpp)
-- [compare_benchmark_main.cpp](/home/haoo/code/study/KV-Store/src/compare_benchmark_main.cpp)
-- [run_compare_bench.sh](/home/haoo/code/study/KV-Store/scripts/run_compare_bench.sh)
-- [run_network_bench.sh](/home/haoo/code/study/KV-Store/scripts/run_network_bench.sh)
-- [test_main.cpp](/home/haoo/code/study/KV-Store/tests/test_main.cpp)
+- [benchmark_main.cpp](../src/benchmark_main.cpp)
+- [compare_benchmark_main.cpp](../src/compare_benchmark_main.cpp)
+- [run_compare_bench.sh](../scripts/run_compare_bench.sh)
+- [run_network_bench.sh](../scripts/run_network_bench.sh)
+- [test_main.cpp](../tests/test_main.cpp)
 
 职责：
 
@@ -101,9 +101,9 @@
 
 文件：
 
-- [defense_dashboard.html](/home/haoo/code/study/KV-Store/demo/defense_dashboard.html)
-- [defense_demo_server.py](/home/haoo/code/study/KV-Store/demo/defense_demo_server.py)
-- [defense_demo_prompt.md](/home/haoo/code/study/KV-Store/docs/defense_demo_prompt.md)
+- [defense_dashboard.html](../demo/defense_dashboard.html)
+- [defense_demo_server.py](../demo/defense_demo_server.py)
+- [defense_demo_prompt.md](../docs/defense_demo_prompt.md)
 
 职责：
 
@@ -112,13 +112,13 @@
 
 ## 3. 当前仓库推荐阅读顺序
 
-1. [thesis_alignment.md](/home/haoo/code/study/KV-Store/docs/thesis_alignment.md)
-2. [README.md](/home/haoo/code/study/KV-Store/README.md)
-3. [module_overview.md](/home/haoo/code/study/KV-Store/docs/module_overview.md)
-4. [experiment_classification.md](/home/haoo/code/study/KV-Store/docs/experiment_classification.md)
-5. [demo_usage.md](/home/haoo/code/study/KV-Store/docs/demo_usage.md)
-6. [protocol_reference.md](/home/haoo/code/study/KV-Store/docs/protocol_reference.md)
-7. [cli_reference.md](/home/haoo/code/study/KV-Store/docs/cli_reference.md)
+1. [thesis_alignment.md](../docs/thesis_alignment.md)
+2. [README.md](../README.md)
+3. [module_overview.md](../docs/module_overview.md)
+4. [experiment_classification.md](../docs/experiment_classification.md)
+5. [demo_usage.md](../docs/demo_usage.md)
+6. [protocol_reference.md](../docs/protocol_reference.md)
+7. [cli_reference.md](../docs/cli_reference.md)
 
 ## 4. 当前主线与实验性内容的边界
 

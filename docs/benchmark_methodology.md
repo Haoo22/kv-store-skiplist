@@ -6,8 +6,8 @@
 
 当前正式性能数据主要来自两类工具：
 
-- [benchmark_main.cpp](/home/haoo/code/study/KV-Store/src/benchmark_main.cpp)
-- [compare_benchmark_main.cpp](/home/haoo/code/study/KV-Store/src/compare_benchmark_main.cpp)
+- [benchmark_main.cpp](../src/benchmark_main.cpp)
+- [compare_benchmark_main.cpp](../src/compare_benchmark_main.cpp)
 
 其中：
 

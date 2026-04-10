@@ -1,6 +1,6 @@
 # KV-Store 开发日志索引
 
-本文档用于给 [README.md](/home/haoo/code/study/KV-Store/README.md) 中 `15. 开发日志` 提供一个快速导航，避免后续论文写作、答辩准备或问题回顾时直接在长日志里盲找。
+本文档用于给 [README.md](../README.md) 中 `15. 开发日志` 提供一个快速导航，避免后续论文写作、答辩准备或问题回顾时直接在长日志里盲找。
 
 ## 1. 使用原则
 
@@ -10,9 +10,9 @@
 
 ## 2. 推荐取材顺序
 
-1. 先看 [thesis_materials.md](/home/haoo/code/study/KV-Store/docs/thesis_materials.md)
-2. 再看 [benchmark_methodology.md](/home/haoo/code/study/KV-Store/docs/benchmark_methodology.md)
-3. 如果需要线程池反例，优先看 [thread_pool_findings.md](/home/haoo/code/study/KV-Store/docs/thread_pool_findings.md)
+1. 先看 [thesis_materials.md](../docs/thesis_materials.md)
+2. 再看 [benchmark_methodology.md](../docs/benchmark_methodology.md)
+3. 如果需要线程池反例，优先看 [thread_pool_findings.md](../docs/thread_pool_findings.md)
 4. 只有在需要完整问题链路时，再回到 README 的 `15. 开发日志`
 
 ## 3. README 开发日志分段索引
@@ -46,7 +46,7 @@
 
 摘要替代文档：
 
-- [thread_pool_findings.md](/home/haoo/code/study/KV-Store/docs/thread_pool_findings.md)
+- [thread_pool_findings.md](../docs/thread_pool_findings.md)
 
 ### 3.3 `15.2 2026-04-06 外部压测工具接入：packetsender`
 
@@ -97,13 +97,13 @@
 
 摘要替代文档：
 
-- [benchmark_methodology.md](/home/haoo/code/study/KV-Store/docs/benchmark_methodology.md)
+- [benchmark_methodology.md](../docs/benchmark_methodology.md)
 
 ## 4. 引用建议
 
 - 主线实现与事实描述：优先引用 README 前 14 节和 `docs/` 独立文档
-- 实验统计口径：优先引用 [benchmark_methodology.md](/home/haoo/code/study/KV-Store/docs/benchmark_methodology.md)
-- 线程池反例结论：优先引用 [thread_pool_findings.md](/home/haoo/code/study/KV-Store/docs/thread_pool_findings.md)
+- 实验统计口径：优先引用 [benchmark_methodology.md](../docs/benchmark_methodology.md)
+- 线程池反例结论：优先引用 [thread_pool_findings.md](../docs/thread_pool_findings.md)
 - 真实问题链路：最后再引用 README `15. 开发日志`
 
 ## 5. 当前定位

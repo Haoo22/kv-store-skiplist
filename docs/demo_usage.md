@@ -22,9 +22,9 @@
 
 文件：
 
-- [defense_dashboard.html](/home/haoo/code/study/KV-Store/demo/defense_dashboard.html)
-- [defense_demo_server.py](/home/haoo/code/study/KV-Store/demo/defense_demo_server.py)
-- [defense_demo_prompt.md](/home/haoo/code/study/KV-Store/docs/defense_demo_prompt.md)
+- [defense_dashboard.html](../demo/defense_dashboard.html)
+- [defense_demo_server.py](../demo/defense_demo_server.py)
+- [defense_demo_prompt.md](../docs/defense_demo_prompt.md)
 
 说明：
 

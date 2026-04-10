@@ -25,12 +25,12 @@
 
 推荐先看：
 
-- 论文支撑摘要：[thesis_materials.md](/home/haoo/code/study/KV-Store/docs/thesis_materials.md)
-- 最终数据对照总表：[final_benchmark_summary.md](/home/haoo/code/study/KV-Store/docs/final_benchmark_summary.md)
-- Benchmark 方法说明：[benchmark_methodology.md](/home/haoo/code/study/KV-Store/docs/benchmark_methodology.md)
-- 系统架构说明：[system_architecture.md](/home/haoo/code/study/KV-Store/docs/system_architecture.md)
-- 请求处理流程：[request_flow.md](/home/haoo/code/study/KV-Store/docs/request_flow.md)
-- 答辩讲述提纲：[defense_talk_track.md](/home/haoo/code/study/KV-Store/docs/defense_talk_track.md)
+- 论文支撑摘要：[thesis_materials.md](docs/thesis_materials.md)
+- 最终数据对照总表：[final_benchmark_summary.md](docs/final_benchmark_summary.md)
+- Benchmark 方法说明：[benchmark_methodology.md](docs/benchmark_methodology.md)
+- 系统架构说明：[system_architecture.md](docs/system_architecture.md)
+- 请求处理流程：[request_flow.md](docs/request_flow.md)
+- 答辩讲述提纲：[defense_talk_track.md](docs/defense_talk_track.md)
 
 ## 2. 目录结构
 
@@ -70,9 +70,9 @@ KV-Store/
 
 ### 3.1 存储层
 
-- [SkipList.hpp](/home/haoo/code/study/KV-Store/include/kvstore/SkipList.hpp)
-- [kvstore.hpp](/home/haoo/code/study/KV-Store/include/kvstore/kvstore.hpp)
-- [kvstore.cpp](/home/haoo/code/study/KV-Store/src/kvstore.cpp)
+- [SkipList.hpp](include/kvstore/SkipList.hpp)
+- [kvstore.hpp](include/kvstore/kvstore.hpp)
+- [kvstore.cpp](src/kvstore.cpp)
 
 职责：
 
@@ -82,8 +82,8 @@ KV-Store/
 
 ### 3.2 持久化层
 
-- [WAL.hpp](/home/haoo/code/study/KV-Store/include/kvstore/WAL.hpp)
-- [WAL.cpp](/home/haoo/code/study/KV-Store/src/WAL.cpp)
+- [WAL.hpp](include/kvstore/WAL.hpp)
+- [WAL.cpp](src/WAL.cpp)
 
 职责：
 
@@ -93,10 +93,10 @@ KV-Store/
 
 ### 3.3 网络与协议层
 
-- [Server.hpp](/home/haoo/code/study/KV-Store/include/kvstore/Server.hpp)
-- [Server.cpp](/home/haoo/code/study/KV-Store/src/Server.cpp)
-- [Protocol.hpp](/home/haoo/code/study/KV-Store/include/kvstore/Protocol.hpp)
-- [Protocol.cpp](/home/haoo/code/study/KV-Store/src/Protocol.cpp)
+- [Server.hpp](include/kvstore/Server.hpp)
+- [Server.cpp](src/Server.cpp)
+- [Protocol.hpp](include/kvstore/Protocol.hpp)
+- [Protocol.cpp](src/Protocol.cpp)
 
 职责：
 
@@ -104,7 +104,7 @@ KV-Store/
 - 通过 `LineCodec` 按 `\r\n` 提取命令
 - 通过 `CommandProcessor` 执行 `PING / PUT / GET / DEL / SCAN / QUIT`
 
-协议细节见 [protocol_reference.md](/home/haoo/code/study/KV-Store/docs/protocol_reference.md)。
+协议细节见 [protocol_reference.md](docs/protocol_reference.md)。
 
 ## 4. 构建与常用命令
 
@@ -129,7 +129,7 @@ cmake --build build -j
 ./scripts/verify_demo_http.sh --help
 ```
 
-完整参数见 [cli_reference.md](/home/haoo/code/study/KV-Store/docs/cli_reference.md)。
+完整参数见 [cli_reference.md](docs/cli_reference.md)。
 
 ## 5. 验证链路
 
@@ -143,7 +143,7 @@ cmake --build build -j
 | Demo 可达性 | `./scripts/verify_demo_http.sh` | 验证答辩展示页面可访问 |
 | Demo 展示 | `python3 demo/defense_demo_server.py` | 答辩展示，不作为正式性能结论 |
 
-验证工作流见 [validation_workflow.md](/home/haoo/code/study/KV-Store/docs/validation_workflow.md)。
+验证工作流见 [validation_workflow.md](docs/validation_workflow.md)。
 
 ## 6. 启动与使用
 
@@ -346,11 +346,11 @@ http://127.0.0.1:8765/defense_dashboard.html
 
 ## 10. 文档入口
 
-- 最终数据对照总表：[final_benchmark_summary.md](/home/haoo/code/study/KV-Store/docs/final_benchmark_summary.md)
-- Benchmark 方法说明：[benchmark_methodology.md](/home/haoo/code/study/KV-Store/docs/benchmark_methodology.md)
-- 论文支撑摘要：[thesis_materials.md](/home/haoo/code/study/KV-Store/docs/thesis_materials.md)
-- 答辩讲述提纲：[defense_talk_track.md](/home/haoo/code/study/KV-Store/docs/defense_talk_track.md)
-- 系统架构说明：[system_architecture.md](/home/haoo/code/study/KV-Store/docs/system_architecture.md)
-- 请求处理流程：[request_flow.md](/home/haoo/code/study/KV-Store/docs/request_flow.md)
-- Demo 使用说明：[demo_usage.md](/home/haoo/code/study/KV-Store/docs/demo_usage.md)
-- 线程池反例摘要：[thread_pool_findings.md](/home/haoo/code/study/KV-Store/docs/thread_pool_findings.md)
+- 最终数据对照总表：[final_benchmark_summary.md](docs/final_benchmark_summary.md)
+- Benchmark 方法说明：[benchmark_methodology.md](docs/benchmark_methodology.md)
+- 论文支撑摘要：[thesis_materials.md](docs/thesis_materials.md)
+- 答辩讲述提纲：[defense_talk_track.md](docs/defense_talk_track.md)
+- 系统架构说明：[system_architecture.md](docs/system_architecture.md)
+- 请求处理流程：[request_flow.md](docs/request_flow.md)
+- Demo 使用说明：[demo_usage.md](docs/demo_usage.md)
+- 线程池反例摘要：[thread_pool_findings.md](docs/thread_pool_findings.md)

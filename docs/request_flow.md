@@ -21,8 +21,8 @@
 
 核心模块：
 
-- [Server.cpp](/home/haoo/code/study/KV-Store/src/Server.cpp)
-- [Server.hpp](/home/haoo/code/study/KV-Store/include/kvstore/Server.hpp)
+- [Server.cpp](../src/Server.cpp)
+- [Server.hpp](../include/kvstore/Server.hpp)
 
 说明：
 
@@ -34,8 +34,8 @@
 
 核心模块：
 
-- [Protocol.cpp](/home/haoo/code/study/KV-Store/src/Protocol.cpp)
-- [Protocol.hpp](/home/haoo/code/study/KV-Store/include/kvstore/Protocol.hpp)
+- [Protocol.cpp](../src/Protocol.cpp)
+- [Protocol.hpp](../include/kvstore/Protocol.hpp)
 
 说明：
 
@@ -56,9 +56,9 @@
 
 核心模块：
 
-- [kvstore.cpp](/home/haoo/code/study/KV-Store/src/kvstore.cpp)
-- [kvstore.hpp](/home/haoo/code/study/KV-Store/include/kvstore/kvstore.hpp)
-- [SkipList.hpp](/home/haoo/code/study/KV-Store/include/kvstore/SkipList.hpp)
+- [kvstore.cpp](../src/kvstore.cpp)
+- [kvstore.hpp](../include/kvstore/kvstore.hpp)
+- [SkipList.hpp](../include/kvstore/SkipList.hpp)
 
 说明：
 
@@ -70,8 +70,8 @@
 
 核心模块：
 
-- [WAL.cpp](/home/haoo/code/study/KV-Store/src/WAL.cpp)
-- [WAL.hpp](/home/haoo/code/study/KV-Store/include/kvstore/WAL.hpp)
+- [WAL.cpp](../src/WAL.cpp)
+- [WAL.hpp](../include/kvstore/WAL.hpp)
 
 说明：
 

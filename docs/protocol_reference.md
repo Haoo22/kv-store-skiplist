@@ -12,8 +12,8 @@
 
 实现依据：
 
-- [Protocol.hpp](/home/haoo/code/study/KV-Store/include/kvstore/Protocol.hpp)
-- [Protocol.cpp](/home/haoo/code/study/KV-Store/src/Protocol.cpp)
+- [Protocol.hpp](../include/kvstore/Protocol.hpp)
+- [Protocol.cpp](../src/Protocol.cpp)
 
 ## 2. 基本语义
 
@@ -188,7 +188,7 @@ ERROR usage: QUIT\r\n
 
 ## 5. 与验证工具的关系
 
-- 手工协议验证：使用 [client_main.cpp](/home/haoo/code/study/KV-Store/src/client_main.cpp) 对应的 `kvstore_client`
+- 手工协议验证：使用 [client_main.cpp](../src/client_main.cpp) 对应的 `kvstore_client`
 - 脚本化协议回归：使用 `./bin/kvstore_bench 127.0.0.1 6380 20 1 full`
 - 外部协议验证：使用 `packetsender`
 - 正式性能结论：只引用 `kvstore_bench` 与 `kvstore_compare_bench`，不引用本协议文档中的示例交互

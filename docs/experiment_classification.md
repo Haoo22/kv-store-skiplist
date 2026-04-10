@@ -51,7 +51,7 @@ ctest --test-dir build --output-on-failure
 - 自动验证 `PING -> PUT -> GET -> SCAN -> DEL -> QUIT` 主链路
 - 同时检查请求构造和响应读取逻辑
 
-协议格式与响应语义见 [protocol_reference.md](/home/haoo/code/study/KV-Store/docs/protocol_reference.md)。
+协议格式与响应语义见 [protocol_reference.md](../docs/protocol_reference.md)。
 
 ### 3.3 外部协议验证
 
@@ -88,7 +88,7 @@ packetsender -A -t -4 -w 1000 127.0.0.1 6380 $'COMMAND\r\n'
 
 - `kvstore_bench` 是底层正式工具
 - `run_network_bench.sh` 是包装脚本，适合批量跑一组网络 benchmark
-- 参数细节见 [cli_reference.md](/home/haoo/code/study/KV-Store/docs/cli_reference.md)
+- 参数细节见 [cli_reference.md](../docs/cli_reference.md)
 
 ### 4.2 进程内对比 benchmark
 
@@ -115,7 +115,7 @@ packetsender -A -t -4 -w 1000 127.0.0.1 6380 $'COMMAND\r\n'
 - `kvstore_compare_bench` 是底层正式工具
 - `run_compare_bench.sh` 是包装脚本，适合批量输出或保存结果
 - `*_wal` 是 compare benchmark 内部补充的实验性 WAL 包装对照
-- 参数细节见 [cli_reference.md](/home/haoo/code/study/KV-Store/docs/cli_reference.md)
+- 参数细节见 [cli_reference.md](../docs/cli_reference.md)
 
 ## 5. 答辩展示 demo
 
@@ -159,4 +159,4 @@ http://127.0.0.1:8765/defense_dashboard.html
 - 性能结论：只引用 `kvstore_bench` 和 `kvstore_compare_bench`
 - 展示效果：引用 demo 的交互方式和答辩价值，但不把 demo 指标当成正式实验结果
 
-更细的 benchmark 统计口径见 [benchmark_methodology.md](/home/haoo/code/study/KV-Store/docs/benchmark_methodology.md)。
+更细的 benchmark 统计口径见 [benchmark_methodology.md](../docs/benchmark_methodology.md)。
