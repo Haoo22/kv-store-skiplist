@@ -77,6 +77,7 @@ int main() {
 
     Ensure(store.Put("alpha", "1"), "engine insert alpha");
     Ensure(store.Put("beta", "2"), "engine insert beta");
+    Ensure(store.Put("aardvark", "0"), "engine insert aardvark");
     Ensure(!store.Put("alpha", "3"), "engine update alpha");
 
     std::string engine_value;
@@ -85,16 +86,24 @@ int main() {
     Ensure(store.Delete("beta"), "engine delete beta");
     Ensure(!store.Delete("missing"), "delete missing engine key");
 
+    const auto ordered_range = store.Scan("a", "z");
+    Ensure(ordered_range.size() == 2, "engine range size after delete");
+    Ensure(ordered_range[0].first == "aardvark", "engine range should stay globally ordered");
+    Ensure(ordered_range[0].second == "0", "engine first range value");
+    Ensure(ordered_range[1].first == "alpha", "engine second range key");
+    Ensure(ordered_range[1].second == "3", "engine second range value");
+
     {
         kvstore::KVStore recovered_store(options);
+        const auto recovered_range = recovered_store.Scan("a", "z");
+        Ensure(recovered_range.size() == 2, "recovered range size");
+        Ensure(recovered_range[0].first == "aardvark", "recovered range key 0");
+        Ensure(recovered_range[0].second == "0", "recovered range value 0");
         Ensure(recovered_store.Get("alpha", &engine_value), "replay should recover alpha");
         Ensure(engine_value == "3", "recovered alpha value");
         Ensure(!recovered_store.Get("beta", &engine_value), "replay should preserve delete");
-
-        const auto engine_range = recovered_store.Scan("a", "z");
-        Ensure(engine_range.size() == 1, "recovered range size");
-        Ensure(engine_range[0].first == "alpha", "recovered range key");
-        Ensure(engine_range[0].second == "3", "recovered range value");
+        Ensure(recovered_range[1].first == "alpha", "recovered range key 1");
+        Ensure(recovered_range[1].second == "3", "recovered range value 1");
     }
 
     const std::string wal_path = MakeWalPath("truncated_replay.log");

@@ -51,11 +51,11 @@
 2. 锁与多线程扩展
 - 原文对“多线程同步”和“shared_mutex”预期较强
 - 当前项目构建标准是 C++14
-- 当前实现里 `SkipList` 实际使用的是 `std::shared_timed_mutex`
+- 当前主线 `KVStore` 已改为分片跳表；每个分片内部使用 `std::shared_timed_mutex`
 - 开题报告里“读写锁进一步优化”的这部分，现在主要落地为两层含义：
-  1. 主线 `SkipList` 已采用 `std::shared_timed_mutex` 完成基础读写分离
-  2. 更高粒度的并发优化被收敛到 `kvstore_compare_bench` 中的 `skiplist_sharded` 实验版本，用于验证细粒度锁收益
-- 当前应改为“项目保留数据结构层可扩展性讨论，但服务端主线不依赖多线程并行执行；更细粒度锁优化作为实验性对照给出”
+  1. 主线 `KVStore` 已采用分片跳表完成更细粒度锁控制
+  2. `skiplist_sharded` 继续保留在 `kvstore_compare_bench` 中，作为主线分片索引的结构镜像对照
+- 当前应改为“服务端主线仍是单线程 Reactor，但内部索引已经切换到细粒度分片锁版本”
 
 3. 高性能表述
 - 原文写法较理想化

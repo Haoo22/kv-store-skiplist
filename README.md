@@ -10,7 +10,7 @@
 - 文本协议：`\r\n` 分隔，支持粘包半包处理
 - 配套工具：客户端、正式 benchmark、恢复验证脚本、答辩 demo
 
-当前工程构建标准为 C++14；当前主线 `SkipList` 使用 `std::shared_timed_mutex` 作为读写锁。
+当前工程构建标准为 C++14；当前主线 `KVStore` 已采用分片跳表实现细粒度锁控制，每个分片内部仍使用 `std::shared_timed_mutex` 作为读写锁。
 
 ## 1. 当前口径
 
@@ -209,9 +209,9 @@ BYE
 
 其中：
 
-- `skiplist_sharded` 是答辩阶段用于验证“细粒度锁跳表”的实验版本
-- 它可以视为开题报告中“读写锁进一步优化到更高并发度”的实验性落地
-- `*_wal` 系列是 compare benchmark 中的实验性 WAL 包装对照，不代表主线服务端结构
+- `kvstore_no_wal` / `kvstore_with_wal` 现在就是毕设提交版主线实现
+- `skiplist_sharded` / `skiplist_sharded_wal` 仍保留在 compare benchmark 中，作为主线分片索引的结构镜像对照
+- `*_wal` 系列用于观察追加日志开销下的相对表现
 - `std_map_sharded` 是更公平的补充对照，不作为答辩主比较口径
 
 ## 7. 答辩版实验结果
@@ -229,13 +229,13 @@ BYE
 
 - 主线不是多线程 worker server
 - 线程池方案没有带来端到端收益
-- 原版整表锁 `SkipList` 不能写成已经优于 `std::map + mutex`
+- 不应再把当前主线写成“单一整表锁跳表”
 
-### 7.2 答辩主比较：细粒度锁跳表 vs 原版红黑树基线
+### 7.2 答辩主比较：主线细粒度锁 KVStore vs 原版红黑树基线
 
-为了和论文里“细粒度锁跳表 vs 原版红黑树基线”的表述一致，答辩时建议主比较使用：
+当前既然主线已经切到细粒度分片跳表，答辩时建议主比较直接使用主线实现：
 
-- `skiplist_sharded`
+- `kvstore_no_wal`
 - `std_map_mutex`
 
 测试命令：
@@ -249,26 +249,26 @@ BYE
 
 - `read` workload 为 `90% GET, 10% PUT`
 - 这组测试更接近“先有稳定数据规模，再做读多写少访问”的场景
-- 这组结果来自不带 WAL 的进程内对比
+- `kvstore_no_wal` 对应当前主线细粒度锁版本在不带 WAL 时的结果
 
 结果：
 
-| preload | `std_map_mutex` | `skiplist_sharded` | 提升倍数 |
+| preload | `std_map_mutex` | `kvstore_no_wal` | 提升倍数 |
 | --- | ---: | ---: | ---: |
-| `100000` | `873795.87 ops/s` | `2419362.06 ops/s` | `2.77x` |
-| `300000` | `658386.40 ops/s` | `1911372.71 ops/s` | `2.90x` |
+| `100000` | `619595.15 ops/s` | `1867065.15 ops/s` | `3.01x` |
+| `300000` | `410030.13 ops/s` | `2013055.88 ops/s` | `4.91x` |
 
 这组结果支持的答辩口径是：
 
-- 原版整表锁跳表没有发挥出并发潜力
-- 当锁粒度下沉到分片级之后，跳表在读多写少、稳定数据规模场景下可以明显超过原版 `std::map + mutex` 基线
+- 当前毕设主线已经采用细粒度分片跳表
+- 在读多写少、稳定数据规模场景下，主线版本已经明显超过原版 `std::map + mutex` 基线
 
-### 7.3 WAL 补测：细粒度锁跳表 vs 原版红黑树基线
+### 7.3 WAL 主比较：主线细粒度锁 KVStore vs 原版红黑树基线
 
-为了回答“带 WAL 之后还能不能保持这个优势”，当前在 `kvstore_compare_bench` 中补充了实验性 WAL 包装对照：
+对于带 WAL 的主线版本，建议直接比较：
 
+- `kvstore_with_wal`
 - `std_map_mutex_wal`
-- `skiplist_sharded_wal`
 
 测试命令：
 
@@ -279,16 +279,16 @@ BYE
 
 关注 `8` 线程结果：
 
-| preload | `std_map_mutex_wal` | `skiplist_sharded_wal` | 提升倍数 |
+| preload | `std_map_mutex_wal` | `kvstore_with_wal` | 提升倍数 |
 | --- | ---: | ---: | ---: |
-| `100000` | `482484.93 ops/s` | `854925.36 ops/s` | `1.77x` |
-| `300000` | `416153.30 ops/s` | `917692.71 ops/s` | `2.21x` |
+| `100000` | `471489.49 ops/s` | `863073.39 ops/s` | `1.83x` |
+| `300000` | `341984.65 ops/s` | `948082.91 ops/s` | `2.77x` |
 
 当前可支持的说法是：
 
-- 在这组 compare benchmark 的实验性 WAL 包装对照里，`skiplist_sharded_wal` 也已经超过 `std_map_mutex_wal`
-- 这说明加上 WAL 后，细粒度锁跳表相对原版红黑树基线的优势仍然存在
-- 但这组结果仍然是进程内实验，不应和主线网络 benchmark 混写
+- 主线版本在带 WAL 时也已经超过 `std_map_mutex_wal`
+- 这说明细粒度锁主线在追加日志开销下仍然保持相对优势
+- `skiplist_sharded_wal` 现在更适合作为结构镜像对照，而不是主叙事主体
 
 ### 7.4 主线网络 benchmark
 
@@ -296,12 +296,12 @@ BYE
 
 | 模式 | 命令 | 结果 |
 | --- | --- | --- |
-| `no-wal` 串行 | `./bin/kvstore_bench 127.0.0.1 6380 5000 1` | `PUT 21908.01 ops/s` `GET 22166.07 ops/s` |
-| `no-wal` pipeline | `./bin/kvstore_bench 127.0.0.1 6380 5000 64` | `PUT 337518.56 ops/s` `GET 260525.22 ops/s` |
-| `no-wal` 多客户端 | `./bin/kvstore_bench 127.0.0.1 6380 500 8 put-get 8` | `aggregate_qps=256408.86` |
-| `with-wal` 串行 | `./bin/kvstore_bench 127.0.0.1 6380 5000 1` | `PUT 11492.80 ops/s` `GET 23503.42 ops/s` |
-| `with-wal` pipeline | `./bin/kvstore_bench 127.0.0.1 6380 5000 64` | `PUT 69097.99 ops/s` `GET 371471.03 ops/s` |
-| `with-wal` 多客户端 | `./bin/kvstore_bench 127.0.0.1 6380 500 8 put-get 8` | `aggregate_qps=98319.75` |
+| `no-wal` 串行 | `./bin/kvstore_bench 127.0.0.1 6380 5000 1` | `PUT 19480.95 ops/s` `GET 23533.51 ops/s` |
+| `no-wal` pipeline | `./bin/kvstore_bench 127.0.0.1 6380 5000 64` | `PUT 162200.74 ops/s` `GET 473978.58 ops/s` |
+| `no-wal` 多客户端 | `./bin/kvstore_bench 127.0.0.1 6380 500 8 put-get 8` | `aggregate_qps=219296.44` |
+| `with-wal` 串行 | `./bin/kvstore_bench 127.0.0.1 6380 5000 1` | `PUT 9427.74 ops/s` `GET 23002.57 ops/s` |
+| `with-wal` pipeline | `./bin/kvstore_bench 127.0.0.1 6380 5000 64` | `PUT 66074.64 ops/s` `GET 191629.62 ops/s` |
+| `with-wal` 多客户端 | `./bin/kvstore_bench 127.0.0.1 6380 500 8 put-get 8` | `aggregate_qps=82047.62` |
 
 ### 7.5 恢复能力补验
 
@@ -342,7 +342,7 @@ http://127.0.0.1:8765/defense_dashboard.html
 - 项目已经形成跳表、WAL、Reactor、文本协议的完整主线
 - 主线系统已经具备恢复能力、多客户端接入能力和正式 benchmark 链路
 - 线程池方案经实测退化，因此不进入主线
-- 如果按照“细粒度锁跳表 vs 原版红黑树基线”来比较，当前 `skiplist_sharded` 已经在读多写少场景下明显超过 `std_map_mutex`
+- 当前毕设主线本身已经是细粒度锁版本，并且在读多写少场景下明显超过原版 `std_map_mutex` 基线
 
 ## 10. 文档入口
 

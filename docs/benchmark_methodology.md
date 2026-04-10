@@ -96,9 +96,9 @@ clients=4 scenario=put-get pipeline=8 ops_per_client=500 total_requests=4000 wal
 
 当前实现边界：
 
-- `skiplist_sharded`、`std_map_sharded` 及其 `*_wal` 版本，都是进程内实验性对照，不是主线服务端结构
-- 其中 `*_wal` 使用的是 compare benchmark 内部补充的实验性 WAL 包装，不等于主线服务端已经切换到该实现
-- 因此带 WAL 的结论可以用于回答“索引结构在追加日志开销下的相对表现”，但不应和主线网络 benchmark 直接混写
+- 当前主线 `KVStore` 已经切换为分片跳表的细粒度锁版本，因此 `kvstore_no_wal` / `kvstore_with_wal` 就是毕设提交版主线结果
+- `skiplist_sharded`、`std_map_sharded` 及其 `*_wal` 版本继续保留为进程内结构镜像或补充对照
+- 其中 `*_wal` 使用的是 compare benchmark 内部补充的 WAL 包装，用于分析追加日志开销下的相对表现
 
 ## 4. 推荐实验引用方式
 
@@ -139,12 +139,12 @@ clients=4 scenario=put-get pipeline=8 ops_per_client=500 total_requests=4000 wal
 
 | 模式 | 命令 | 结果 |
 | --- | --- | --- |
-| `no-wal` 串行 | `./bin/kvstore_bench 127.0.0.1 6380 5000 1` | `PUT 21908.01 ops/s` `GET 22166.07 ops/s` |
-| `no-wal` pipeline | `./bin/kvstore_bench 127.0.0.1 6380 5000 64` | `PUT 337518.56 ops/s` `GET 260525.22 ops/s` |
-| `no-wal` 多客户端 | `./bin/kvstore_bench 127.0.0.1 6380 500 8 put-get 8` | `aggregate_qps=256408.86` |
-| `with-wal` 串行 | `./bin/kvstore_bench 127.0.0.1 6380 5000 1` | `PUT 11492.80 ops/s` `GET 23503.42 ops/s` |
-| `with-wal` pipeline | `./bin/kvstore_bench 127.0.0.1 6380 5000 64` | `PUT 69097.99 ops/s` `GET 371471.03 ops/s` |
-| `with-wal` 多客户端 | `./bin/kvstore_bench 127.0.0.1 6380 500 8 put-get 8` | `aggregate_qps=98319.75` |
+| `no-wal` 串行 | `./bin/kvstore_bench 127.0.0.1 6380 5000 1` | `PUT 19480.95 ops/s` `GET 23533.51 ops/s` |
+| `no-wal` pipeline | `./bin/kvstore_bench 127.0.0.1 6380 5000 64` | `PUT 162200.74 ops/s` `GET 473978.58 ops/s` |
+| `no-wal` 多客户端 | `./bin/kvstore_bench 127.0.0.1 6380 500 8 put-get 8` | `aggregate_qps=219296.44` |
+| `with-wal` 串行 | `./bin/kvstore_bench 127.0.0.1 6380 5000 1` | `PUT 9427.74 ops/s` `GET 23002.57 ops/s` |
+| `with-wal` pipeline | `./bin/kvstore_bench 127.0.0.1 6380 5000 64` | `PUT 66074.64 ops/s` `GET 191629.62 ops/s` |
+| `with-wal` 多客户端 | `./bin/kvstore_bench 127.0.0.1 6380 500 8 put-get 8` | `aggregate_qps=82047.62` |
 
 ### 7.2 进程内对比 benchmark
 
@@ -159,8 +159,8 @@ clients=4 scenario=put-get pipeline=8 ops_per_client=500 total_requests=4000 wal
 
 | workload | `kvstore_no_wal` | `kvstore_with_wal` | `std_map_mutex` |
 | --- | --- | --- | --- |
-| `mixed` | `303610.76 ops/s` | `162551.06 ops/s` | `865979.50 ops/s` |
-| `read` | `443724.76 ops/s` | `286471.41 ops/s` | `1207779.54 ops/s` |
+| `read preload=100000` | `1867065.15 ops/s` | `863073.39 ops/s` | `619595.15 ops/s` |
+| `read preload=300000` | `2013055.88 ops/s` | `948082.91 ops/s` | `410030.13 ops/s` |
 
 ### 7.3 恢复能力补验
 
@@ -193,7 +193,7 @@ WAL recovery verification passed
 
 - 当前主线不是多线程 worker server
 - 线程池方案没有带来端到端收益，反而退化
-- 当前 `SkipList` 实现未在进程内对比实验中跑赢 `std_map_mutex`
+- 当前主线细粒度锁版本已经在读多写少场景下跑赢 `std_map_mutex`
 
 推荐结论口径：
 
@@ -202,13 +202,11 @@ WAL recovery verification passed
 
 ## 8. 2026-04-09 锁粒度实验：分片跳表
 
-为验证“当前 `SkipList` 是否主要受整表锁粒度限制”，在 [compare_benchmark_main.cpp](/home/haoo/code/study/KV-Store/src/compare_benchmark_main.cpp) 中新增了一个仅用于对比压测的实验版本：
+当前主线 `KVStore` 已经采用分片跳表。为了继续把“主线整合开销”和“纯结构收益”分开看，程序中仍保留一个结构镜像对照：
 
 - `skiplist_sharded`
 
-它的做法不是修改主线 `KVStore`，而是把 key 按哈希分布到多个 `SkipList` 分片中，让不同 key 的操作尽量落到不同锁上。
-
-这个版本当前只用于进程内对比实验，不代表主线服务端已经切换到该设计。
+它与当前主线采用相同的分片跳表思路，但不承担 `KVStore` 主线封装本身的额外整合职责。
 
 ### 8.1 答辩主比较：读多写少、预加载 100k
 
@@ -227,8 +225,8 @@ WAL recovery verification passed
 
 说明：
 
-- 这组是当前答辩主比较口径
-- 比较对象是“原版红黑树基线”与“细粒度锁跳表实验版”
+- 这组现在更适合作为“纯结构镜像对照”
+- 当前答辩主比较应优先引用 `kvstore_no_wal` 与 `std_map_mutex`
 
 ### 8.2 答辩主比较：读多写少、预加载 300k
 
@@ -249,7 +247,7 @@ WAL recovery verification passed
 
 - 这组结果强烈说明，当前原版 `SkipList` 的主要问题之一确实是锁粒度过粗
 - 一旦把 key 分散到多个跳表分片，读多写少场景下吞吐会明显上升
-- 按当前答辩主比较口径，`skiplist_sharded` 已经明显超过 `std_map_mutex`
+- 即使在去掉主线封装影响的结构镜像对照里，`skiplist_sharded` 也明显超过 `std_map_mutex`
 
 ### 8.4 WAL 补测：`std_map_mutex_wal` vs `skiplist_sharded_wal`
 
@@ -274,9 +272,9 @@ WAL recovery verification passed
 
 当前判断：
 
-- 在这组进程内 WAL 对照里，`skiplist_sharded_wal` 也已经超过 `std_map_mutex_wal`
-- 这说明加上 WAL 之后，细粒度锁跳表相对原版红黑树基线的优势仍然成立
-- 但这组结果仍然属于 compare benchmark 的实验性 WAL 包装对照，不应直接写成主线网络服务端结论
+- 在这组进程内 WAL 结构镜像对照里，`skiplist_sharded_wal` 也已经超过 `std_map_mutex_wal`
+- 这说明细粒度锁思路在结构镜像层面同样成立
+- 但当前论文和答辩主叙事，应优先使用已经切换到细粒度锁的主线 `kvstore_with_wal`
 
 ### 8.5 补充对照：`std_map_sharded`
 
