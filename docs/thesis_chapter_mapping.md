@@ -45,6 +45,7 @@
 - [SkipList.hpp](/home/haoo/code/study/KV-Store/include/kvstore/SkipList.hpp)
 - [kvstore.hpp](/home/haoo/code/study/KV-Store/include/kvstore/kvstore.hpp)
 - [kvstore.cpp](/home/haoo/code/study/KV-Store/src/kvstore.cpp)
+- [compare_benchmark_main.cpp](/home/haoo/code/study/KV-Store/src/compare_benchmark_main.cpp)
 
 ## 4. 持久化与恢复机制设计
 
@@ -137,3 +138,4 @@
 - 线程池方案写成实验性反例，不写成成功优化
 - 当前主线固定表述为单线程 Reactor
 - 如果正文采用“细粒度锁跳表 vs 原版红黑树基线”口径，应明确比较对象是 `skiplist_sharded` 与 `std_map_mutex`
+- 如果正文要回应开题报告中的“读写锁进一步优化”，应明确区分：主线使用 `std::shared_timed_mutex`，更细粒度锁优化来自 `skiplist_sharded` 实验对照

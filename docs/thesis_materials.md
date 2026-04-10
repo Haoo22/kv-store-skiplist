@@ -78,6 +78,7 @@
 - 文本协议主链路已经可用
 - WAL 支持重放恢复
 - 项目当前使用 C++14，`SkipList` 使用 `std::shared_timed_mutex` 作为读写锁
+- 如果对照开题报告中的“读写锁优化”表述，当前更准确的说法是：主线先落在 `std::shared_timed_mutex`，更细粒度锁优化则落在 `skiplist_sharded` 实验对照
 - `kvstore_bench` 已支持 `scenario` 和多客户端 aggregate QPS
 - `packetsender` 更适合外部协议验证，不适合作为主 benchmark 工具
 - 线程池方案已做过完整 benchmark，但端到端明显退化，因此未纳入主线
