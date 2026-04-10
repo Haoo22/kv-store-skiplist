@@ -100,25 +100,25 @@ clients=4 scenario=put-get pipeline=8 ops_per_client=500 total_requests=4000 wal
 - `skiplist_sharded`、`std_map_sharded` 及其 `*_wal` 版本继续保留为进程内结构镜像或补充对照
 - 其中 `*_wal` 使用的是 compare benchmark 内部补充的 WAL 包装，用于分析追加日志开销下的相对表现
 
-## 4. 推荐实验引用方式
+## 4. 实验引用方式
 
-论文中建议这样区分：
+正式材料中按以下方式区分：
 
 - 网络吞吐、pipeline 上限、多客户端 aggregate QPS：引用 `kvstore_bench`
 - 数据结构和持久化路径对比：引用 `kvstore_compare_bench`
 - 协议正确性验证：不要把它写成 benchmark 结果
 - demo 图表：不要把它写成正式实验数据
 
-## 5. 推荐表述
+## 5. 结果表述原则
 
-适合写进论文的口径包括：
+正式文档可直接使用以下表述：
 
 - “单客户端串行测试更接近交互延迟场景”
 - “pipeline 模式更接近服务端吞吐上限测试”
 - “多客户端模式使用整组 wall clock 时间计算 aggregate QPS”
 - “进程内对比实验主要用于分析数据结构与持久化路径差异”
 
-## 6. 不建议的表述
+## 6. 表述边界
 
 - 不要把 demo 中的动态图表当作 benchmark 结果
 - 不要把协议回归命令当作性能结论
@@ -274,7 +274,7 @@ WAL recovery verification passed
 
 - 在这组进程内 WAL 结构镜像对照里，`skiplist_sharded_wal` 也已经超过 `std_map_mutex_wal`
 - 这说明细粒度锁思路在结构镜像层面同样成立
-- 但当前论文和答辩主叙事，应优先使用已经切换到细粒度锁的主线 `kvstore_with_wal`
+- 正式结果说明应优先使用已经切换到细粒度锁的主线 `kvstore_with_wal`
 
 ### 8.5 补充对照：`std_map_sharded`
 
@@ -282,7 +282,7 @@ WAL recovery verification passed
 
 - `std_map_sharded`
 
-它不作为答辩主比较口径，但可用于内部分析。
+它不作为主比较口径，但可用于内部分析。
 
 以 `./bin/kvstore_compare_bench 5000 8 100000 read` 的 `8` 线程结果为例：
 

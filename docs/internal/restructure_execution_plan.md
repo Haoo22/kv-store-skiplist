@@ -18,7 +18,7 @@
 - 冻结后续所有表述边界
 
 交付物：
-- `docs/thesis_alignment.md`
+- `docs/internal/thesis_alignment.md`
 - README 中的论文入口与边界说明
 
 验收标准：

@@ -30,7 +30,6 @@
 - Benchmark 方法说明：[benchmark_methodology.md](docs/benchmark_methodology.md)
 - 系统架构说明：[system_architecture.md](docs/system_architecture.md)
 - 请求处理流程：[request_flow.md](docs/request_flow.md)
-- 答辩讲述提纲：[defense_talk_track.md](docs/defense_talk_track.md)
 
 ## 2. 目录结构
 
@@ -44,19 +43,15 @@ KV-Store/
 ├── docs/
 │   ├── benchmark_methodology.md
 │   ├── cli_reference.md
-│   ├── defense_talk_track.md
 │   ├── demo_usage.md
 │   ├── experiment_classification.md
 │   ├── final_benchmark_summary.md
-│   ├── figure_materials.md
+│   ├── internal/
 │   ├── module_overview.md
 │   ├── protocol_reference.md
 │   ├── request_flow.md
 │   ├── system_architecture.md
-│   ├── thesis_alignment.md
-│   ├── thesis_chapter_mapping.md
 │   ├── thesis_materials.md
-│   ├── thread_pool_findings.md
 │   ├── validation_workflow.md
 │   └── wal_recovery_validation.md
 ├── include/kvstore/
@@ -212,9 +207,9 @@ BYE
 - `kvstore_no_wal` / `kvstore_with_wal` 现在就是毕设提交版主线实现
 - `skiplist_sharded` / `skiplist_sharded_wal` 仍保留在 compare benchmark 中，作为主线分片索引的结构镜像对照
 - `*_wal` 系列用于观察追加日志开销下的相对表现
-- `std_map_sharded` 是更公平的补充对照，不作为答辩主比较口径
+- `std_map_sharded` 是更公平的补充对照，不作为主比较口径
 
-## 7. 答辩版实验结果
+## 7. 实验结果
 
 ### 7.1 主线系统是否达成开题核心目标
 
@@ -231,9 +226,9 @@ BYE
 - 线程池方案没有带来端到端收益
 - 不应再把当前主线写成“单一整表锁跳表”
 
-### 7.2 答辩主比较：主线细粒度锁 KVStore vs 原版红黑树基线
+### 7.2 主比较：主线细粒度锁 KVStore vs 原版红黑树基线
 
-当前既然主线已经切到细粒度分片跳表，答辩时建议主比较直接使用主线实现：
+主比较使用当前主线实现：
 
 - `kvstore_no_wal`
 - `std_map_mutex`
@@ -258,8 +253,6 @@ BYE
 | `100000` | `619595.15 ops/s` | `1867065.15 ops/s` | `3.01x` |
 | `300000` | `410030.13 ops/s` | `2013055.88 ops/s` | `4.91x` |
 
-这组结果支持的答辩口径是：
-
 - 当前毕设主线已经采用细粒度分片跳表
 - 在读多写少、稳定数据规模场景下，主线版本已经明显超过原版 `std::map + mutex` 基线
 
@@ -283,8 +276,6 @@ BYE
 | --- | ---: | ---: | ---: |
 | `100000` | `471489.49 ops/s` | `863073.39 ops/s` | `1.83x` |
 | `300000` | `341984.65 ops/s` | `948082.91 ops/s` | `2.77x` |
-
-当前可支持的说法是：
 
 - 主线版本在带 WAL 时也已经超过 `std_map_mutex_wal`
 - 这说明细粒度锁主线在追加日志开销下仍然保持相对优势
@@ -315,7 +306,7 @@ BYE
 WAL recovery verification passed
 ```
 
-## 8. 答辩展示 Demo
+## 8. Demo
 
 启动：
 
@@ -335,7 +326,7 @@ http://127.0.0.1:8765/defense_dashboard.html
 - 页面动态图表属于展示型指标
 - 正式性能结论仍以 benchmark 为准
 
-## 9. 当前结论
+## 9. 结论
 
 当前最稳的结论是：
 
@@ -349,8 +340,8 @@ http://127.0.0.1:8765/defense_dashboard.html
 - 最终数据对照总表：[final_benchmark_summary.md](docs/final_benchmark_summary.md)
 - Benchmark 方法说明：[benchmark_methodology.md](docs/benchmark_methodology.md)
 - 论文支撑摘要：[thesis_materials.md](docs/thesis_materials.md)
-- 答辩讲述提纲：[defense_talk_track.md](docs/defense_talk_track.md)
 - 系统架构说明：[system_architecture.md](docs/system_architecture.md)
 - 请求处理流程：[request_flow.md](docs/request_flow.md)
 - Demo 使用说明：[demo_usage.md](docs/demo_usage.md)
-- 线程池反例摘要：[thread_pool_findings.md](docs/thread_pool_findings.md)
+
+补充说明与答辩辅助材料见 [docs/internal](docs/internal)。

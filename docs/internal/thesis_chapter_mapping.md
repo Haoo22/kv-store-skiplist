@@ -13,8 +13,8 @@
 主要材料来源：
 
 - `/home/haoo/code/study/lunwen.txt`
-- [thesis_alignment.md](../docs/thesis_alignment.md)
-- [thread_pool_findings.md](../docs/thread_pool_findings.md)
+- [thesis_alignment.md](../internal/thesis_alignment.md)
+- [thread_pool_findings.md](../internal/thread_pool_findings.md)
 
 ## 2. 系统需求与总体设计
 
@@ -27,10 +27,10 @@
 
 主要材料来源：
 
-- [README.md](../README.md)
-- [module_overview.md](../docs/module_overview.md)
-- [system_architecture.md](../docs/system_architecture.md)
-- [thesis_materials.md](../docs/thesis_materials.md)
+- [README.md](../../README.md)
+- [module_overview.md](../module_overview.md)
+- [system_architecture.md](../system_architecture.md)
+- [thesis_materials.md](../thesis_materials.md)
 
 ## 3. 核心数据结构与存储引擎设计
 
@@ -42,10 +42,10 @@
 
 主要材料来源：
 
-- [SkipList.hpp](../include/kvstore/SkipList.hpp)
-- [kvstore.hpp](../include/kvstore/kvstore.hpp)
-- [kvstore.cpp](../src/kvstore.cpp)
-- [compare_benchmark_main.cpp](../src/compare_benchmark_main.cpp)
+- [SkipList.hpp](../../include/kvstore/SkipList.hpp)
+- [kvstore.hpp](../../include/kvstore/kvstore.hpp)
+- [kvstore.cpp](../../src/kvstore.cpp)
+- [compare_benchmark_main.cpp](../../src/compare_benchmark_main.cpp)
 
 ## 4. 持久化与恢复机制设计
 
@@ -58,9 +58,9 @@
 
 主要材料来源：
 
-- [WAL.hpp](../include/kvstore/WAL.hpp)
-- [WAL.cpp](../src/WAL.cpp)
-- [wal_recovery_validation.md](../docs/wal_recovery_validation.md)
+- [WAL.hpp](../../include/kvstore/WAL.hpp)
+- [WAL.cpp](../../src/WAL.cpp)
+- [wal_recovery_validation.md](../wal_recovery_validation.md)
 
 ## 5. 网络通信与协议实现
 
@@ -73,13 +73,13 @@
 
 主要材料来源：
 
-- [Server.hpp](../include/kvstore/Server.hpp)
-- [Server.cpp](../src/Server.cpp)
-- [Protocol.hpp](../include/kvstore/Protocol.hpp)
-- [Protocol.cpp](../src/Protocol.cpp)
-- [server_main.cpp](../src/server_main.cpp)
-- [request_flow.md](../docs/request_flow.md)
-- [protocol_reference.md](../docs/protocol_reference.md)
+- [Server.hpp](../../include/kvstore/Server.hpp)
+- [Server.cpp](../../src/Server.cpp)
+- [Protocol.hpp](../../include/kvstore/Protocol.hpp)
+- [Protocol.cpp](../../src/Protocol.cpp)
+- [server_main.cpp](../../src/server_main.cpp)
+- [request_flow.md](../request_flow.md)
+- [protocol_reference.md](../protocol_reference.md)
 
 ## 6. 系统实现与工具链
 
@@ -91,11 +91,11 @@
 
 主要材料来源：
 
-- [client_main.cpp](../src/client_main.cpp)
-- [benchmark_main.cpp](../src/benchmark_main.cpp)
-- [compare_benchmark_main.cpp](../src/compare_benchmark_main.cpp)
-- [validation_workflow.md](../docs/validation_workflow.md)
-- [cli_reference.md](../docs/cli_reference.md)
+- [client_main.cpp](../../src/client_main.cpp)
+- [benchmark_main.cpp](../../src/benchmark_main.cpp)
+- [compare_benchmark_main.cpp](../../src/compare_benchmark_main.cpp)
+- [validation_workflow.md](../validation_workflow.md)
+- [cli_reference.md](../cli_reference.md)
 
 ## 7. 实验设计与结果分析
 
@@ -108,12 +108,12 @@
 
 主要材料来源：
 
-- [experiment_classification.md](../docs/experiment_classification.md)
-- [benchmark_methodology.md](../docs/benchmark_methodology.md)
-- [validation_workflow.md](../docs/validation_workflow.md)
-- [thread_pool_findings.md](../docs/thread_pool_findings.md)
-- [development_log_index.md](../docs/development_log_index.md)
-- [README.md](../README.md) 的答辩版实验结果部分
+- [experiment_classification.md](../experiment_classification.md)
+- [benchmark_methodology.md](../benchmark_methodology.md)
+- [validation_workflow.md](../validation_workflow.md)
+- [thread_pool_findings.md](../internal/thread_pool_findings.md)
+- [development_log_index.md](../internal/development_log_index.md)
+- [README.md](../../README.md) 的实验结果部分
 
 ## 8. 答辩展示与工程总结
 
@@ -125,11 +125,11 @@
 
 主要材料来源：
 
-- [demo_usage.md](../docs/demo_usage.md)
-- [defense_demo_prompt.md](../docs/defense_demo_prompt.md)
-- [thesis_materials.md](../docs/thesis_materials.md)
-- [defense_talk_track.md](../docs/defense_talk_track.md)
-- [figure_materials.md](../docs/figure_materials.md)
+- [demo_usage.md](../demo_usage.md)
+- [defense_demo_prompt.md](../internal/defense_demo_prompt.md)
+- [thesis_materials.md](../thesis_materials.md)
+- [defense_talk_track.md](../internal/defense_talk_track.md)
+- [figure_materials.md](../internal/figure_materials.md)
 
 ## 9. 写作注意事项
 

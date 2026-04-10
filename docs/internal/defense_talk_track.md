@@ -25,8 +25,8 @@
 
 对应材料：
 
-- [system_architecture.md](../docs/system_architecture.md)
-- [module_overview.md](../docs/module_overview.md)
+- [system_architecture.md](../system_architecture.md)
+- [module_overview.md](../module_overview.md)
 
 ## 3. 请求处理链路
 
@@ -47,8 +47,8 @@
 
 对应材料：
 
-- [request_flow.md](../docs/request_flow.md)
-- [protocol_reference.md](../docs/protocol_reference.md)
+- [request_flow.md](../request_flow.md)
+- [protocol_reference.md](../protocol_reference.md)
 
 ## 4. 为什么主线保留单线程 Reactor
 
@@ -68,8 +68,8 @@
 
 对应材料：
 
-- [thread_pool_findings.md](../docs/thread_pool_findings.md)
-- [request_flow.md](../docs/request_flow.md)
+- [thread_pool_findings.md](../internal/thread_pool_findings.md)
+- [request_flow.md](../request_flow.md)
 
 ## 5. 实验怎么分
 
@@ -85,9 +85,9 @@
 
 对应材料：
 
-- [experiment_classification.md](../docs/experiment_classification.md)
-- [benchmark_methodology.md](../docs/benchmark_methodology.md)
-- [demo_usage.md](../docs/demo_usage.md)
+- [experiment_classification.md](../experiment_classification.md)
+- [benchmark_methodology.md](../benchmark_methodology.md)
+- [demo_usage.md](../demo_usage.md)
 
 ## 5.1 主比较怎么讲
 

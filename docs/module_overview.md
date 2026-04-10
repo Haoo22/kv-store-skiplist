@@ -92,7 +92,7 @@
 - 正式 benchmark
 - 进程内对比压测
 
-补充说明：
+说明：
 
 - `benchmark_main.cpp` 和 `compare_benchmark_main.cpp` 是两类正式实验的底层程序入口
 - `run_network_bench.sh` 和 `run_compare_bench.sh` 是围绕这两个入口的包装脚本
@@ -103,7 +103,7 @@
 
 - [defense_dashboard.html](../demo/defense_dashboard.html)
 - [defense_demo_server.py](../demo/defense_demo_server.py)
-- [defense_demo_prompt.md](../docs/defense_demo_prompt.md)
+- [defense_demo_prompt.md](../docs/internal/defense_demo_prompt.md)
 
 职责：
 
@@ -112,7 +112,7 @@
 
 ## 3. 当前仓库推荐阅读顺序
 
-1. [thesis_alignment.md](../docs/thesis_alignment.md)
+1. [thesis_alignment.md](../docs/internal/thesis_alignment.md)
 2. [README.md](../README.md)
 3. [module_overview.md](../docs/module_overview.md)
 4. [experiment_classification.md](../docs/experiment_classification.md)

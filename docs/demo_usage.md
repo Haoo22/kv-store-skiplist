@@ -24,7 +24,7 @@
 
 - [defense_dashboard.html](../demo/defense_dashboard.html)
 - [defense_demo_server.py](../demo/defense_demo_server.py)
-- [defense_demo_prompt.md](../docs/defense_demo_prompt.md)
+- [defense_demo_prompt.md](../docs/internal/defense_demo_prompt.md)
 
 说明：
 
@@ -88,7 +88,7 @@ curl --noproxy '*' http://127.0.0.1:8765/defense_dashboard.html
 - 模拟服务退出
 - 通过 WAL 恢复内存状态
 
-## 5. 推荐答辩讲解顺序
+## 5. 示例演示顺序
 
 1. 先用“协议演示”说明这不是静态图，而是系统真实交互
 2. 再切到“并发演示”展示多客户端和指标变化
@@ -96,7 +96,7 @@ curl --noproxy '*' http://127.0.0.1:8765/defense_dashboard.html
 
 ## 6. 使用边界
 
-需要明确告诉老师或写入答辩材料的点：
+使用时需要明确的边界：
 
 - demo 中的动态 QPS 和延迟是展示型指标
 - 正式性能结论应以 `kvstore_bench` 和 `kvstore_compare_bench` 为准
