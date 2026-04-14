@@ -109,6 +109,6 @@
 ## 6. 引用边界
 
 - 正式性能结论只引用 `kvstore_bench` 和 `kvstore_compare_bench`
-- 协议回归、WAL 恢复脚本和 demo 页面不作为性能 benchmark 证据
+- 协议回归和 WAL 恢复脚本不作为性能 benchmark 证据
 - 当前主线固定表述为“单线程 Reactor + 节点级锁跳表 + WAL”
 - 不把当前实现写成“多线程主线服务端”

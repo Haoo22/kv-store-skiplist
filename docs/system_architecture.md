@@ -1,6 +1,6 @@
 # KV-Store 系统架构说明
 
-本文档把当前项目的系统结构、请求数据流和验证支撑层抽成论文可复用的架构说明。
+本文档用于描述当前最终答辩版本的系统结构。
 
 ## 1. 总体架构
 
@@ -9,15 +9,14 @@
 1. 接入层：客户端与文本协议
 2. 网络与调度层：单线程 Reactor
 3. 存储与持久化层：`KVStore + SkipList + WAL`
-4. 验证与展示层：tests、benchmark、demo
+4. 验证层：tests、benchmark、恢复脚本
 
 ## 2. 结构图
 
 ```text
 +---------------------------+
-|   kvstore_client          |
-|   packetsender            |
-|   kvstore_bench           |
+| kvstore_client            |
+| kvstore_bench             |
 +------------+--------------+
              |
              v
@@ -47,57 +46,40 @@
              |
              v
 +---------------------------+
-| Verification & Demo       |
-| tests / compare bench /   |
-| defense dashboard         |
+| Tests & Benchmarks        |
+| ctest / compare bench /   |
+| WAL recovery scripts      |
 +---------------------------+
 ```
 
-## 3. 请求处理数据流
-
-当前主线请求处理过程如下：
+## 3. 请求处理流程
 
 1. 客户端通过 TCP 发送文本命令
-2. 服务端的单线程 Reactor 通过 `epoll` 感知连接读写事件
+2. 服务端单线程 Reactor 通过 `epoll` 感知连接读写事件
 3. `LineCodec` 从字节流中按 `\r\n` 提取完整命令
 4. `CommandProcessor` 解析命令并调用 `KVStore`
-5. 写操作先记录 WAL，再更新内存索引
-6. 读写结果被编码成文本响应并写回客户端
+5. 写操作先记录 WAL，再更新跳表
+6. 结果被编码成文本响应并写回客户端
 
-## 4. 主线设计选择
+## 4. 当前主线设计选择
 
-当前主线固定为单线程 Reactor，原因不是“没有考虑并发”，而是：
+当前主线固定为单线程 Reactor，原因如下：
 
-- 单线程版本已经形成稳定的协议、WAL、benchmark 和 demo 闭环
-- 线程池方案已做过端到端实验，但 benchmark 显示明显退化
-- 因此主线设计保留单线程 Reactor，把线程池方案作为反例分析材料保留
+- 它已经形成稳定的协议、WAL 和 benchmark 闭环
+- 与开题报告相比，网络模型做了必要收敛，但核心目标仍保留
+- 存储层把优化重点放在节点级锁跳表
 
-## 5. 存储与持久化关系
-
-存储层和 WAL 的关系可概括为：
+## 5. 存储层与持久化关系
 
 - `SkipList` 负责有序键值索引
-- 当前 `SkipList` 通过节点级锁控制局部并发访问
-- `KVStore` 负责对外提供统一读写接口
-- `WAL` 负责把写操作追加到日志
-- 系统重启后通过日志重放恢复内存状态
+- 跳表内部采用节点级锁控制局部并发访问
+- `KVStore` 对外提供统一的 `Put/Get/Delete/Scan`
+- `WAL` 负责写前追加日志与重启恢复
 
-这条链路直接支撑论文中的“轻量级但具备基本可恢复能力”。
+## 6. 论文建议口径
 
-## 6. 验证与展示支撑层
+论文和答辩中建议固定写成：
 
-当前项目并不是只有主线代码，还配了一层完整的验证与展示支撑：
-
-- `ctest`：基础正确性
-- `kvstore_bench`：正式网络 benchmark
-- `kvstore_compare_bench`：进程内对比实验
-- `kvstore_client` / `packetsender`：协议验证
-- `demo/defense_demo_server.py` + `defense_dashboard.html`：答辩展示
-
-## 7. 论文写作建议
-
-论文中建议把这个架构图作为：
-
-- 系统总体结构图
-- 请求处理流程图的基础
-- “为什么主线保留单线程 Reactor”的说明背景
+- “系统采用单线程 Reactor 处理网络事件”
+- “存储层采用节点级锁跳表实现细粒度并发控制”
+- “系统通过 WAL 获得基础持久化与恢复能力”

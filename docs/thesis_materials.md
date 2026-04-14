@@ -11,7 +11,7 @@
 - 以 WAL 作为基础持久化与恢复机制
 - 以 `epoll + 非阻塞 socket + 单线程 Reactor` 作为主线网络模型
 - 以文本协议承载 `PING/PUT/GET/DEL/SCAN/QUIT`
-- 以 benchmark、协议验证和 demo 形成完整验证链路
+- 以 benchmark、协议验证和恢复验证形成完整验证链路
 
 ## 2. 系统结构概括
 
@@ -20,7 +20,7 @@
 1. 存储层：`SkipList + KVStore`
 2. 持久化层：`WAL`
 3. 网络与协议层：`Server + Protocol`
-4. 验证与展示层：benchmark、tests、demo
+4. 验证层：benchmark、tests、恢复脚本
 
 - 能直接对应仓库模块
 - 易于画系统架构图
@@ -49,11 +49,6 @@
 - `std_map_mutex`
 - `std_map_mutex_wal`
 
-### 3.4 反例分析
-
-- 线程池方案端到端退化
-- 说明“并行化设计不等于吞吐提升”
-
 ## 4. 结果归纳
 
 - 当前主线实现是单线程 Reactor
@@ -62,7 +57,6 @@
 - 项目当前使用 C++14，主线 `KVStore` 已切换到节点级锁跳表
 - `kvstore_bench` 已支持 `scenario` 和多客户端 aggregate QPS
 - `packetsender` 更适合外部协议验证，不适合作为主 benchmark 工具
-- 线程池方案已做过完整 benchmark，但端到端明显退化，因此未纳入主线
 - 当前主线已经达到“完整闭环、恢复能力、多客户端接入、正式 benchmark 链路”这几个核心预期
 - 当前主线尚不能写成“多线程并行主线”
 - 按“主线细粒度锁 KVStore vs 原版红黑树基线”这一主比较方式，当前主线版本已经明显占优

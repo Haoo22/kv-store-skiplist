@@ -215,25 +215,6 @@ KVStore single-thread Reactor server listening on 0.0.0.0:6380, WAL enabled, pat
 - 在当前 Codex 沙箱中，本地 TCP 连接可能受限
 - 如果出现 `Operation not permitted`，应在本地终端或沙箱外执行该脚本
 
-### 5.5 `verify_demo_http.sh`
-
-命令：
-
-```bash
-./scripts/verify_demo_http.sh
-./scripts/verify_demo_http.sh --help
-```
-
-用途：
-
-- 启动答辩 demo HTTP 服务
-- 访问 `defense_dashboard.html`
-- 验证页面内容已正常提供
-
-可覆盖环境变量：
-
-- `HOST`
-- `PORT`
 
 注意：
 
@@ -243,6 +224,5 @@ KVStore single-thread Reactor server listening on 0.0.0.0:6380, WAL enabled, pat
 
 - 正式 benchmark：`kvstore_bench`、`kvstore_compare_bench`
 - 协议验证：`kvstore_client`、`kvstore_bench ... full`、`packetsender`
-- 答辩展示：`python3 demo/defense_demo_server.py`
 
-这三类工具应在论文和 README 中严格区分，不混用结论。
+这些工具应在论文和 README 中严格区分，不混用结论。
