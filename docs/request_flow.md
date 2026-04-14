@@ -1,49 +1,47 @@
-# KV-Store 请求处理流程说明
+# KV-Store 请求处理流程
 
-本文档用于描述当前主线系统中，一条客户端请求如何从网络接入一路走到存储执行、WAL 写入和响应返回。
+本文档描述一条请求从网络接入到响应返回的执行路径。
 
 ## 1. 总体流程
 
-在当前单线程 Reactor 主线中，一条请求的大致处理顺序为：
-
 ```text
 客户端发送命令
--> socket 接收字节流
--> LineCodec 提取完整行
+-> 服务端读取 socket
+-> LineCodec 按 \r\n 提取完整行
 -> CommandProcessor 解析命令
 -> KVStore 执行读写
--> 写操作先追加 WAL
+-> 写操作先写 WAL
 -> 生成文本响应
 -> Reactor 写回 socket
 ```
 
-## 2. 网络接入阶段
+## 2. 网络接入
 
-核心模块：
+核心文件：
 
-- [Server.cpp](../src/Server.cpp)
-- [Server.hpp](../include/kvstore/Server.hpp)
+- [src/Server.cpp](../src/Server.cpp)
+- [include/kvstore/Server.hpp](../include/kvstore/Server.hpp)
 
 说明：
 
-- 服务端使用 `epoll` 监听连接事件和读写事件
+- 服务端使用 `epoll` 监听连接和读写事件
 - 连接 socket 为非阻塞模式
-- 当前主线中，请求读取、协议解析、命令执行和响应写回都在同一个 Reactor 线程中完成
+- 读取、解析、执行和写回都在同一个 Reactor 线程中完成
 
-## 3. 协议解析阶段
+## 3. 协议解析
 
-核心模块：
+核心文件：
 
-- [Protocol.cpp](../src/Protocol.cpp)
-- [Protocol.hpp](../include/kvstore/Protocol.hpp)
+- [src/Protocol.cpp](../src/Protocol.cpp)
+- [include/kvstore/Protocol.hpp](../include/kvstore/Protocol.hpp)
 
 说明：
 
-- `LineCodec` 按 `\r\n` 切分完整命令
-- 通过缓冲区保留半包内容，避免 TCP 粘包和半包导致命令错乱
-- `CommandProcessor` 负责把文本命令映射为具体存储操作
+- `LineCodec` 负责按 `\r\n` 切分完整命令
+- 半包内容会保留在连接缓冲区中
+- `CommandProcessor` 负责参数解析与命令分发
 
-当前支持的命令包括：
+支持命令：
 
 - `PING`
 - `PUT <key> <value>`
@@ -52,53 +50,43 @@
 - `SCAN <start> <end>`
 - `QUIT`
 
-## 4. 存储执行阶段
+## 4. 存储执行
 
-核心模块：
+核心文件：
 
-- [kvstore.cpp](../src/kvstore.cpp)
-- [kvstore.hpp](../include/kvstore/kvstore.hpp)
-- [SkipList.hpp](../include/kvstore/SkipList.hpp)
-
-说明：
-
-- `KVStore` 对外提供统一的 `Put/Get/Delete/Scan`
-- 内部索引结构为跳表
-- 跳表内部采用节点级锁完成细粒度控制
-- `Scan` 利用有序键空间支持范围查询
-
-## 5. WAL 处理阶段
-
-核心模块：
-
-- [WAL.cpp](../src/WAL.cpp)
-- [WAL.hpp](../include/kvstore/WAL.hpp)
+- [src/kvstore.cpp](../src/kvstore.cpp)
+- [include/kvstore/kvstore.hpp](../include/kvstore/kvstore.hpp)
+- [include/kvstore/SkipList.hpp](../include/kvstore/SkipList.hpp)
 
 说明：
 
-- 写操作在更新内存索引前先写 WAL
-- WAL 采用追加写
-- 系统启动时通过 replay 重建内存状态
-- 若日志尾部存在不完整记录，会跳过尾部损坏数据
+- `KVStore` 提供统一的 `Put`、`Get`、`Delete`、`Scan` 接口
+- 跳表负责有序键值索引
+- 单 key 操作基于节点级锁与原子前向指针完成更新
+- `Scan` 在有序底层链表上执行范围遍历，并通过范围锁与写操作同步
 
-## 6. 响应返回阶段
+## 5. WAL 处理
+
+核心文件：
+
+- [src/WAL.cpp](../src/WAL.cpp)
+- [include/kvstore/WAL.hpp](../include/kvstore/WAL.hpp)
 
 说明：
 
-- 存储执行完成后，结果会被编码成文本响应
-- 常见响应包括：
-  - `PONG`
-  - `OK PUT`
-  - `OK UPDATE`
-  - `VALUE <value>`
-  - `RESULT ...`
-  - `OK DELETE`
-  - `BYE`
+- `PUT` 和 `DEL` 在更新内存前先追加 WAL
+- 重启时通过 replay 重建内存状态
+- 不完整的尾部记录会被跳过
 
-## 7. 论文写作建议
+## 6. 响应返回
 
-论文中可将本文档内容直接用于：
+执行结果会编码成文本响应并写回客户端，常见响应包括：
 
-- 请求处理时序说明
-- 协议层与存储层的交互描述
-- 单线程 Reactor 与存储层调用链说明
+- `PONG`
+- `OK PUT`
+- `OK UPDATE`
+- `VALUE <value>`
+- `NOT_FOUND`
+- `RESULT ...`
+- `OK DELETE`
+- `BYE`

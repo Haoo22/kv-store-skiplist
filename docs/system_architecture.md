@@ -1,17 +1,17 @@
-# KV-Store 系统架构说明
+# KV-Store 系统架构
 
-本文档用于描述当前最终答辩版本的系统结构。
+本文档说明项目的模块划分和主要组件关系。
 
-## 1. 总体架构
+## 1. 分层结构
 
-当前项目可抽象为四层：
+项目可以分为四层：
 
-1. 接入层：客户端与文本协议
-2. 网络与调度层：单线程 Reactor
-3. 存储与持久化层：`KVStore + SkipList + WAL`
-4. 验证层：tests、benchmark、恢复脚本
+1. 接入层
+2. 网络与调度层
+3. 存储与持久化层
+4. 测试与验证层
 
-## 2. 结构图
+## 2. 架构图
 
 ```text
 +---------------------------+
@@ -47,39 +47,63 @@
              v
 +---------------------------+
 | Tests & Benchmarks        |
-| ctest / compare bench /   |
-| WAL recovery scripts      |
+| ctest / scripts / bench   |
 +---------------------------+
 ```
 
-## 3. 请求处理流程
+## 3. 接入层
 
-1. 客户端通过 TCP 发送文本命令
-2. 服务端单线程 Reactor 通过 `epoll` 感知连接读写事件
-3. `LineCodec` 从字节流中按 `\r\n` 提取完整命令
-4. `CommandProcessor` 解析命令并调用 `KVStore`
-5. 写操作先记录 WAL，再更新跳表
-6. 结果被编码成文本响应并写回客户端
+接入层包括：
 
-## 4. 当前主线设计选择
+- `kvstore_client`
+- `kvstore_bench`
+- 其他基于 TCP 的外部客户端
 
-当前主线固定为单线程 Reactor，原因如下：
+这一层负责建立 TCP 连接并发送文本协议命令。
 
-- 它已经形成稳定的协议、WAL 和 benchmark 闭环
-- 与开题报告相比，网络模型做了必要收敛，但核心目标仍保留
-- 存储层把优化重点放在节点级锁跳表
+## 4. 网络与调度层
 
-## 5. 存储层与持久化关系
+核心文件：
 
-- `SkipList` 负责有序键值索引
-- 跳表内部采用节点级锁控制局部并发访问
-- `KVStore` 对外提供统一的 `Put/Get/Delete/Scan`
-- `WAL` 负责写前追加日志与重启恢复
+- [src/Server.cpp](../src/Server.cpp)
+- [include/kvstore/Server.hpp](../include/kvstore/Server.hpp)
+- [src/Protocol.cpp](../src/Protocol.cpp)
+- [include/kvstore/Protocol.hpp](../include/kvstore/Protocol.hpp)
 
-## 6. 论文建议口径
+职责：
 
-论文和答辩中建议固定写成：
+- 接受连接
+- 管理 `epoll` 事件
+- 读取和写回 socket
+- 处理粘包与半包
+- 将文本命令分发给存储层
 
-- “系统采用单线程 Reactor 处理网络事件”
-- “存储层采用节点级锁跳表实现细粒度并发控制”
-- “系统通过 WAL 获得基础持久化与恢复能力”
+## 5. 存储与持久化层
+
+核心文件：
+
+- [src/kvstore.cpp](../src/kvstore.cpp)
+- [include/kvstore/kvstore.hpp](../include/kvstore/kvstore.hpp)
+- [include/kvstore/SkipList.hpp](../include/kvstore/SkipList.hpp)
+- [src/WAL.cpp](../src/WAL.cpp)
+- [include/kvstore/WAL.hpp](../include/kvstore/WAL.hpp)
+
+职责：
+
+- 使用跳表维护有序键值索引
+- 提供 `Put`、`Get`、`Delete`、`Scan`
+- 对写操作进行 WAL 追加写
+- 在服务启动时重放 WAL 恢复状态
+
+## 6. 测试与验证层
+
+包括：
+
+- `ctest`
+- `kvstore_tests`
+- `verify_protocol_regression.sh`
+- `verify_wal_recovery.sh`
+- `kvstore_bench`
+- `kvstore_compare_bench`
+
+这一层用于验证协议、恢复逻辑、并发行为和性能表现。

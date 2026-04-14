@@ -1,14 +1,14 @@
 # KV-Store 验证工作流
 
-本文档给出当前答辩主线版本的推荐验证顺序。
+本文档给出推荐的验证顺序和每一步的目的。
 
 ## 1. 推荐顺序
 
 1. 编译项目
-2. 跑单元/集成测试
-3. 跑协议回归
-4. 跑 WAL 恢复验证
-5. 跑正式 benchmark
+2. 运行单元与集成测试
+3. 运行协议回归
+4. 运行 WAL 恢复验证
+5. 运行 benchmark
 
 ## 2. 编译
 
@@ -17,17 +17,20 @@ cmake -S . -B build
 cmake --build build -j
 ```
 
-## 3. 单元/集成测试
+## 3. 单元与集成测试
 
 ```bash
 ctest --test-dir build --output-on-failure
 ./bin/kvstore_tests
 ```
 
-用途：
+覆盖内容：
 
-- 验证跳表、WAL、协议解析和基础恢复逻辑
-- 验证节点级锁跳表在并发插入、读取、删除和扫描压力下的基本正确性
+- 跳表基础行为
+- 协议解析
+- WAL 回放
+- 并发插入、读取、删除
+- 扫描一致性与高 churn 场景
 
 ## 4. 协议回归
 
@@ -35,9 +38,14 @@ ctest --test-dir build --output-on-failure
 ./scripts/verify_protocol_regression.sh
 ```
 
-用途：
+覆盖内容：
 
-- 验证 `PING/PUT/GET/SCAN/DEL/QUIT` 主链路
+- `PING`
+- `PUT`
+- `GET`
+- `SCAN`
+- `DEL`
+- `QUIT`
 
 ## 5. WAL 恢复验证
 
@@ -45,34 +53,32 @@ ctest --test-dir build --output-on-failure
 ./scripts/verify_wal_recovery.sh
 ```
 
-脚本会自动完成：
+覆盖内容：
 
-- 清理旧数据目录
-- 启动启用 WAL 的服务端
-- 写入测试 key
-- 重启服务端
-- 验证重启后仍能读回 key
+- 写入 WAL
+- 停止并重启服务端
+- 重放日志恢复内存状态
+- 恢复后 `GET` 校验
 
-## 6. 正式 benchmark
+## 6. Benchmark
 
 网络 benchmark：
 
 ```bash
-./bin/kvstore_bench 127.0.0.1 6380 10000 64
-./bin/kvstore_bench 127.0.0.1 6380 500 8 put-get 4
-./scripts/run_network_bench.sh
+./bin/kvstore_bench 127.0.0.1 6380 5000 1
+./bin/kvstore_bench 127.0.0.1 6380 5000 64
+./bin/kvstore_bench 127.0.0.1 6380 500 8 put-get 8
 ```
 
-进程内对比：
+进程内对比 benchmark：
 
 ```bash
-./bin/kvstore_compare_bench 20000 8 100000 mixed
-./bin/kvstore_compare_bench 20000 8 100000 read
-./bin/kvstore_compare_bench 20000 8 100000 write
-./scripts/run_compare_bench.sh
+./bin/kvstore_compare_bench 500 8 0 mixed
+./bin/kvstore_compare_bench 500 8 0 read
+./bin/kvstore_compare_bench 500 8 0 write
 ```
 
-用途：
+说明：
 
-- `kvstore_bench` 用于网络端到端吞吐结果
-- `kvstore_compare_bench` 用于节点级锁跳表与 `std_map_mutex` 基线对照
+- 网络 benchmark 用于观察端到端吞吐表现
+- 进程内 benchmark 用于对比不同数据结构和 WAL 包装的相对开销

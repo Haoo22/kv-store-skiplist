@@ -1,20 +1,19 @@
 # KV-Store Benchmark 方法说明
 
-本文档说明当前节点级锁版本中正式 benchmark 的统计口径、参数含义和推荐引用方式。
+本文档说明项目中的性能测试工具、参数含义和结果解读方式。
 
-## 1. 正式 benchmark 工具
+## 1. Benchmark 工具
 
-当前正式性能数据主要来自两类工具：
+项目包含两类 benchmark：
 
-- [benchmark_main.cpp](../src/benchmark_main.cpp)
-- [compare_benchmark_main.cpp](../src/compare_benchmark_main.cpp)
+- `kvstore_bench`
+  端到端网络 benchmark，覆盖协议解析、事件循环、存储执行与响应写回。
+- `kvstore_compare_bench`
+  进程内 benchmark，用于对比不同存储实现和 WAL 开销。
 
-其中：
+这两类工具的目的不同，不应混合解读。
 
-- `kvstore_bench` 负责端到端网络 benchmark
-- `kvstore_compare_bench` 负责进程内对比实验
-
-## 2. `kvstore_bench` 统计口径
+## 2. 网络 Benchmark
 
 命令格式：
 
@@ -22,28 +21,41 @@
 ./bin/kvstore_bench [host] [port] [operations] [pipeline_depth] [scenario] [clients]
 ```
 
-说明：
+参数说明：
 
-- `operations`：每个 phase、每个 client 执行的操作次数
-- `pipeline_depth`：单批次并行发出的请求数
-- `scenario`：`put-get` 或 `full`
-- `clients`：并发客户端数
+- `host`
+  服务端地址，默认 `127.0.0.1`
+- `port`
+  服务端端口，默认 `6380`
+- `operations`
+  每个阶段、每个客户端执行的操作数
+- `pipeline_depth`
+  每批次在途请求数
+- `scenario`
+  `put-get` 或 `full`
+- `clients`
+  并发客户端数
 
-引用建议：
+建议使用方式：
 
-- 串行结果用于说明交互延迟场景
-- pipeline 结果用于说明端到端吞吐上限
-- 多客户端结果用于说明 aggregate QPS
+- `pipeline_depth=1`
+  观察串行请求路径的吞吐与延迟
+- 较大的 `pipeline_depth`
+  观察协议层和事件循环的吞吐上限
+- `clients > 1`
+  观察多客户端下的 aggregate QPS
+- `scenario=full`
+  做完整协议主链路回归
 
-## 3. `kvstore_compare_bench` 统计口径
+## 3. 进程内 Benchmark
 
 命令格式：
 
 ```text
-./bin/kvstore_compare_bench [ops_per_thread] [max_threads] [preload_keys>=0] [mixed|read|write]
+./bin/kvstore_compare_bench [ops_per_thread] [max_threads] [preload_keys] [mixed|read|write]
 ```
 
-统计字段包括：
+输出字段：
 
 - `threads`
 - `ops/thread`
@@ -53,7 +65,7 @@
 - `avg_latency(ns)`
 - `final_size`
 
-当前 compare benchmark 固定比较：
+当前固定比较以下实现：
 
 - `kvstore_no_wal`
 - `kvstore_with_wal`
@@ -62,53 +74,31 @@
 
 说明：
 
-- `kvstore_no_wal` / `kvstore_with_wal` 对应当前节点级锁主线实现
-- `std_map_mutex` / `std_map_mutex_wal` 是原版红黑树基线
-- `*_wal` 使用 compare benchmark 内部补充的 WAL 包装，用于观察追加日志开销下的相对影响
+- `kvstore_*` 对应当前项目的跳表实现
+- `std_map_mutex*` 为 `std::map + mutex` 基线
+- `*_wal` 表示带 WAL 包装的版本
 
-## 4. 当前主比较口径
+## 4. Workload 说明
 
-论文和答辩里建议固定使用下面的主比较：
-
-- 无 WAL：`kvstore_no_wal` vs `std_map_mutex`
-- 有 WAL：`kvstore_with_wal` vs `std_map_mutex_wal`
-
-推荐 workload：
-
-- `read`
-  说明节点级锁跳表在读多写少、稳定数据规模下的吞吐优势
 - `mixed`
-  说明更接近日常读写混合场景的表现
+  混合读写删除，适合观察常规工作负载
+- `read`
+  预加载数据后持续读，适合观察读取路径吞吐
 - `write`
-  说明写多场景下锁竞争与 WAL 开销的影响
+  连续写入，适合观察写锁竞争与 WAL 开销
 
-## 5. 当前分支的代表性结果
+## 5. 环境建议
 
-以下结果来自：
+为了获得更稳定的结果，建议：
 
-```text
-./bin/kvstore_compare_bench 20000 8 100000 mixed
-./bin/kvstore_compare_bench 20000 8 100000 read
-./bin/kvstore_compare_bench 20000 8 100000 write
-```
+- 使用同一台机器重复多次测试
+- 在测试前清理旧的 `data/` 目录
+- 不与其他高负载任务同时运行
+- 网络 benchmark 与协议验证脚本顺序执行，避免端口冲突
 
-关注 `8` 线程结果：
+## 6. 结果解读
 
-| workload | `std_map_mutex` | `kvstore_no_wal` | `std_map_mutex_wal` | `kvstore_with_wal` |
-| --- | ---: | ---: | ---: | ---: |
-| `mixed` | `613721.45 ops/s` | `4596228.24 ops/s` | `222463.99 ops/s` | `199994.80 ops/s` |
-| `read` | `919778.04 ops/s` | `7855355.03 ops/s` | `545412.63 ops/s` | `769301.87 ops/s` |
-| `write` | `578380.03 ops/s` | `2827052.72 ops/s` | `137791.88 ops/s` | `128888.06 ops/s` |
-
-解读：
-
-- 节点级锁主线在无 WAL 场景下已经明显超过 `std_map_mutex`
-- 在 `read` workload 下优势最明显，符合论文“读写锁进一步细粒度化”的叙事
-- 引入 WAL 后，吞吐主要受同步写盘开销约束，但主线仍与红黑树基线保持相近或更优的相对表现
-
-## 6. 引用边界
-
-- 正式性能结论只引用 `kvstore_bench` 和 `kvstore_compare_bench`
-- 协议回归和 WAL 恢复脚本不作为性能 benchmark 证据
-- 当前主线固定表述为“单线程 Reactor + 节点级锁跳表 + WAL”
-- 不把当前实现写成“多线程主线服务端”
+- `kvstore_bench` 结果反映端到端服务能力
+- `kvstore_compare_bench` 结果反映存储结构和 WAL 包装的相对开销
+- 带 WAL 与不带 WAL 的结果应分别比较
+- 不同工具的吞吐数值不应直接横向比较
