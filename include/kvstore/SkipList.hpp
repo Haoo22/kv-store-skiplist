@@ -40,6 +40,7 @@ public:
 
     bool Put(const Key& key, const Value& value) {
         std::shared_lock<std::shared_timed_mutex> lifecycle_lock(lifecycle_mutex_);
+        std::unique_lock<std::shared_timed_mutex> range_lock(range_mutex_);
 
         while (true) {
             std::vector<Node*> predecessors(max_level_, nullptr);
@@ -119,6 +120,7 @@ public:
 
     bool Delete(const Key& key) {
         std::shared_lock<std::shared_timed_mutex> lifecycle_lock(lifecycle_mutex_);
+        std::unique_lock<std::shared_timed_mutex> range_lock(range_mutex_);
 
         while (true) {
             std::vector<Node*> predecessors(max_level_, nullptr);
@@ -164,6 +166,7 @@ public:
 
     std::vector<value_type> Scan(const Key& start, const Key& end) const {
         std::shared_lock<std::shared_timed_mutex> lifecycle_lock(lifecycle_mutex_);
+        std::shared_lock<std::shared_timed_mutex> range_lock(range_mutex_);
         std::vector<value_type> result;
 
         if (compare_(end, start)) {
@@ -207,6 +210,7 @@ public:
 
     void Clear() {
         std::unique_lock<std::shared_timed_mutex> lifecycle_lock(lifecycle_mutex_);
+        std::unique_lock<std::shared_timed_mutex> range_lock(range_mutex_);
         for (std::size_t level = 0; level < max_level_; ++level) {
             head_->forward[level].store(nullptr, std::memory_order_release);
         }
@@ -389,6 +393,7 @@ private:
     Compare compare_;
 
     mutable std::shared_timed_mutex lifecycle_mutex_;
+    mutable std::shared_timed_mutex range_mutex_;
     mutable std::mutex ownership_mutex_;
     std::unique_ptr<Node> head_;
     std::vector<std::unique_ptr<Node>> owned_nodes_;

@@ -266,6 +266,47 @@ int main() {
                "scan stress test should preserve final key count");
     }
 
+    {
+        kvstore::SkipList<int, std::string> consistent_scan_skip_list;
+        for (int key = 0; key < 2000; ++key) {
+            static_cast<void>(consistent_scan_skip_list.Put(
+                key,
+                "value-" + std::to_string(key)));
+        }
+
+        std::thread writer([&consistent_scan_skip_list]() {
+            for (int round = 0; round < 10; ++round) {
+                for (int key = 0; key < 1000; ++key) {
+                    Ensure(consistent_scan_skip_list.Delete(key),
+                           "writer should delete existing key during consistency test");
+                }
+                for (int key = 0; key < 1000; ++key) {
+                    static_cast<void>(consistent_scan_skip_list.Put(
+                        key,
+                        "restored-" + std::to_string(round) + "-" + std::to_string(key)));
+                }
+            }
+        });
+
+        std::thread scanner([&consistent_scan_skip_list]() {
+            for (int round = 0; round < 40; ++round) {
+                const auto full_range = consistent_scan_skip_list.Scan(0, 1999);
+                Ensure(full_range.size() >= 1000 && full_range.size() <= 2000,
+                       "scan should observe a valid in-range key count");
+                for (std::size_t index = 1; index < full_range.size(); ++index) {
+                    Ensure(full_range[index - 1].first < full_range[index].first,
+                           "consistent scan should remain ordered");
+                }
+            }
+        });
+
+        writer.join();
+        scanner.join();
+
+        Ensure(consistent_scan_skip_list.Size() == 2000,
+               "consistency scan test should restore full key set");
+    }
+
     RemoveFileIfExists(options.wal_path);
     RemoveFileIfExists(wal_path);
 
