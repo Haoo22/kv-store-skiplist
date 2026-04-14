@@ -27,9 +27,7 @@ public:
           compare_(std::move(compare)),
           head_(std::make_unique<Node>(max_level_ - 1, Key{}, Value{})),
           current_level_(1),
-          size_(0),
-          random_engine_(std::random_device{}()),
-          level_distribution_(probability_) {}
+          size_(0) {}
 
     SkipList(const SkipList&) = delete;
     SkipList& operator=(const SkipList&) = delete;
@@ -350,12 +348,21 @@ private:
         return true;
     }
 
-    std::size_t RandomLevel() {
+    std::size_t RandomLevel() const {
+        thread_local std::mt19937 engine(SeedForThread());
+        thread_local std::bernoulli_distribution distribution(probability_);
         std::size_t level = 1;
-        while (level < max_level_ && level_distribution_(random_engine_)) {
+        while (level < max_level_ && distribution(engine)) {
             ++level;
         }
         return level;
+    }
+
+    static unsigned int SeedForThread() {
+        std::random_device device;
+        const unsigned int random_seed = device();
+        const auto thread_hash = std::hash<std::thread::id> {}(std::this_thread::get_id());
+        return random_seed ^ static_cast<unsigned int>(thread_hash);
     }
 
     void RaiseCurrentLevel(std::size_t candidate) {
@@ -387,8 +394,6 @@ private:
     std::vector<std::unique_ptr<Node>> owned_nodes_;
     std::atomic<std::size_t> current_level_;
     std::atomic<std::size_t> size_;
-    mutable std::mt19937 random_engine_;
-    mutable std::bernoulli_distribution level_distribution_;
 };
 
 }  // namespace kvstore

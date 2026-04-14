@@ -105,10 +105,6 @@ packetsender -A -t -4 -w 1000 127.0.0.1 6380 $'COMMAND\r\n'
 - 对比 `kvstore_with_wal`
 - 对比 `std_map_mutex`
 - 对比 `std_map_mutex_wal`
-- 对比 `skiplist_sharded`
-- 对比 `skiplist_sharded_wal`
-- 对比 `std_map_sharded`
-- 对比 `std_map_sharded_wal`
 
 说明：
 

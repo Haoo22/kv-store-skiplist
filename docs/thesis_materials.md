@@ -47,9 +47,7 @@
 - `kvstore_no_wal`
 - `kvstore_with_wal`
 - `std_map_mutex`
-- `skiplist_sharded`
 - `std_map_mutex_wal`
-- `skiplist_sharded_wal`
 
 ### 3.4 反例分析
 
@@ -61,8 +59,7 @@
 - 当前主线实现是单线程 Reactor
 - 文本协议主链路已经可用
 - WAL 支持重放恢复
-- 项目当前使用 C++14，主线 `KVStore` 已切换到分片跳表；每个分片内部使用 `std::shared_timed_mutex`
-- 如果对照开题报告中的“读写锁优化”表述，当前更准确的说法是：更细粒度锁版本已经进入主线，`skiplist_sharded` 只保留为结构镜像对照
+- 项目当前使用 C++14，主线 `KVStore` 已切换到节点级锁跳表
 - `kvstore_bench` 已支持 `scenario` 和多客户端 aggregate QPS
 - `packetsender` 更适合外部协议验证，不适合作为主 benchmark 工具
 - 线程池方案已做过完整 benchmark，但端到端明显退化，因此未纳入主线
@@ -70,4 +67,3 @@
 - 当前主线尚不能写成“多线程并行主线”
 - 按“主线细粒度锁 KVStore vs 原版红黑树基线”这一主比较方式，当前主线版本已经明显占优
 - 即使带上 WAL，主线版本 `kvstore_with_wal` 也已经超过 `std_map_mutex_wal`
-- 但这不应扩写成“跳表已经优于所有分片化 `std::map` 实现”

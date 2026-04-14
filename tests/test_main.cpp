@@ -232,6 +232,39 @@ int main() {
         }
     }
 
+    {
+        kvstore::SkipList<int, std::string> scan_stress_skip_list;
+        for (int key = 0; key < 2000; ++key) {
+            static_cast<void>(scan_stress_skip_list.Put(key, "seed-" + std::to_string(key)));
+        }
+
+        std::thread writer([&scan_stress_skip_list]() {
+            for (int round = 0; round < 20; ++round) {
+                for (int key = 0; key < 2000; ++key) {
+                    static_cast<void>(scan_stress_skip_list.Put(
+                        key,
+                        "updated-" + std::to_string(round) + "-" + std::to_string(key)));
+                }
+            }
+        });
+
+        std::thread scanner([&scan_stress_skip_list]() {
+            for (int round = 0; round < 40; ++round) {
+                const auto full_range = scan_stress_skip_list.Scan(0, 1999);
+                for (std::size_t index = 1; index < full_range.size(); ++index) {
+                    Ensure(full_range[index - 1].first < full_range[index].first,
+                           "concurrent scan should remain ordered");
+                }
+            }
+        });
+
+        writer.join();
+        scanner.join();
+
+        Ensure(scan_stress_skip_list.Size() == 2000,
+               "scan stress test should preserve final key count");
+    }
+
     RemoveFileIfExists(options.wal_path);
     RemoveFileIfExists(wal_path);
 

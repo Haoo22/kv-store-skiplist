@@ -110,10 +110,6 @@ KVStore single-thread Reactor server listening on 0.0.0.0:6380, WAL enabled, pat
 - 对比 `kvstore_with_wal`
 - 对比 `std_map_mutex`
 - 对比 `std_map_mutex_wal`
-- 对比 `skiplist_sharded`
-- 对比 `skiplist_sharded_wal`
-- 对比 `std_map_sharded`
-- 对比 `std_map_sharded_wal`
 
 说明：
 

@@ -1,6 +1,6 @@
 # KV-Store Benchmark 方法说明
 
-本文档说明当前项目中正式 benchmark 的统计口径、参数含义和推荐引用方式。
+本文档说明当前节点级锁版本中正式 benchmark 的统计口径、参数含义和推荐引用方式。
 
 ## 1. 正式 benchmark 工具
 
@@ -22,48 +22,18 @@
 ./bin/kvstore_bench [host] [port] [operations] [pipeline_depth] [scenario] [clients]
 ```
 
-### 2.1 参数含义
+说明：
 
 - `operations`：每个 phase、每个 client 执行的操作次数
 - `pipeline_depth`：单批次并行发出的请求数
-- `scenario`：
-  - `put-get`
-  - `full`
+- `scenario`：`put-get` 或 `full`
 - `clients`：并发客户端数
 
-### 2.2 单客户端模式
+引用建议：
 
-当 `clients=1` 时，输出按 phase 展示，例如：
-
-```text
-PUT      ops=1000 pipeline=1 elapsed=... throughput=... avg_latency=...
-GET      ops=1000 pipeline=1 elapsed=... throughput=... avg_latency=...
-```
-
-这里的统计口径是：
-
-- `throughput`：当前 phase 的 `operations / elapsed`
-- `avg_latency`：当前 phase 的平均耗时
-
-### 2.3 多客户端模式
-
-当 `clients>1` 时，输出整组 aggregate QPS，例如：
-
-```text
-clients=4 scenario=put-get pipeline=8 ops_per_client=500 total_requests=4000 wall_seconds=... aggregate_qps=...
-```
-
-这里的统计口径是：
-
-- `ops_per_client`：每个客户端每个 phase 的操作次数
-- `total_requests = clients * operations * phase_count`
-- `aggregate_qps = total_requests / wall_seconds`
-
-注意：
-
-- `QUIT` 不计入 aggregate 统计
-- `full` 场景的 `phase_count` 为 `5`
-- `put-get` 场景的 `phase_count` 为 `2`
+- 串行结果用于说明交互延迟场景
+- pipeline 结果用于说明端到端吞吐上限
+- 多客户端结果用于说明 aggregate QPS
 
 ## 3. `kvstore_compare_bench` 统计口径
 
@@ -83,217 +53,62 @@ clients=4 scenario=put-get pipeline=8 ops_per_client=500 total_requests=4000 wal
 - `avg_latency(ns)`
 - `final_size`
 
-用途：
+当前 compare benchmark 固定比较：
 
-- 对比 `kvstore_no_wal`
-- 对比 `kvstore_with_wal`
-- 对比 `std_map_mutex`
-- 对比 `std_map_mutex_wal`
-- 对比 `std_map_sharded`
-- 对比 `std_map_sharded_wal`
-- 对比 `skiplist_sharded` 这种“通过 key 分片提升锁粒度”的实验版本
-- 对比 `skiplist_sharded_wal`
-
-当前实现边界：
-
-- 当前主线 `KVStore` 已经切换为分片跳表的细粒度锁版本，因此 `kvstore_no_wal` / `kvstore_with_wal` 就是毕设提交版主线结果
-- `skiplist_sharded`、`std_map_sharded` 及其 `*_wal` 版本继续保留为进程内结构镜像或补充对照
-- 其中 `*_wal` 使用的是 compare benchmark 内部补充的 WAL 包装，用于分析追加日志开销下的相对表现
-
-## 4. 实验引用方式
-
-正式材料中按以下方式区分：
-
-- 网络吞吐、pipeline 上限、多客户端 aggregate QPS：引用 `kvstore_bench`
-- 数据结构和持久化路径对比：引用 `kvstore_compare_bench`
-- 协议正确性验证：不要把它写成 benchmark 结果
-- demo 图表：不要把它写成正式实验数据
-
-## 5. 结果表述原则
-
-正式文档可直接使用以下表述：
-
-- “单客户端串行测试更接近交互延迟场景”
-- “pipeline 模式更接近服务端吞吐上限测试”
-- “多客户端模式使用整组 wall clock 时间计算 aggregate QPS”
-- “进程内对比实验主要用于分析数据结构与持久化路径差异”
-
-## 6. 表述边界
-
-- 不要把 demo 中的动态图表当作 benchmark 结果
-- 不要把协议回归命令当作性能结论
-- 不要混淆单客户端 phase 吞吐和多客户端 aggregate QPS
-
-## 7. 2026-04-09 对照开题预期的实测结果
-
-下面这组结果用于回答一个更具体的问题：当前主线实现是否已经达到开题报告里“完整闭环、支持并发接入、具备恢复能力、可做性能验证”的预期。
-
-### 7.1 网络 benchmark
-
-测试环境与口径：
-
-- 主线服务端：单线程 Reactor
-- `no-wal`：`./bin/kvstore_server --no-wal`
-- `with-wal`：`./bin/kvstore_server --wal-sync-ms 10`
-- benchmark 工具：`./bin/kvstore_bench`
-
-| 模式 | 命令 | 结果 |
-| --- | --- | --- |
-| `no-wal` 串行 | `./bin/kvstore_bench 127.0.0.1 6380 5000 1` | `PUT 19480.95 ops/s` `GET 23533.51 ops/s` |
-| `no-wal` pipeline | `./bin/kvstore_bench 127.0.0.1 6380 5000 64` | `PUT 162200.74 ops/s` `GET 473978.58 ops/s` |
-| `no-wal` 多客户端 | `./bin/kvstore_bench 127.0.0.1 6380 500 8 put-get 8` | `aggregate_qps=219296.44` |
-| `with-wal` 串行 | `./bin/kvstore_bench 127.0.0.1 6380 5000 1` | `PUT 9427.74 ops/s` `GET 23002.57 ops/s` |
-| `with-wal` pipeline | `./bin/kvstore_bench 127.0.0.1 6380 5000 64` | `PUT 66074.64 ops/s` `GET 191629.62 ops/s` |
-| `with-wal` 多客户端 | `./bin/kvstore_bench 127.0.0.1 6380 500 8 put-get 8` | `aggregate_qps=82047.62` |
-
-### 7.2 进程内对比 benchmark
-
-测试命令：
-
-```text
-./bin/kvstore_compare_bench 5000 8 10000 mixed
-./bin/kvstore_compare_bench 5000 8 10000 read
-```
-
-关注 `8` 线程结果：
-
-| workload | `kvstore_no_wal` | `kvstore_with_wal` | `std_map_mutex` |
-| --- | --- | --- | --- |
-| `read preload=100000` | `1867065.15 ops/s` | `863073.39 ops/s` | `619595.15 ops/s` |
-| `read preload=300000` | `2013055.88 ops/s` | `948082.91 ops/s` | `410030.13 ops/s` |
-
-### 7.3 恢复能力补验
-
-测试命令：
-
-```text
-./scripts/verify_wal_recovery.sh
-```
-
-结果：
-
-```text
-WAL recovery verification passed
-```
-
-### 7.4 对照开题报告的判断
-
-已经达到的预期：
-
-- 完整数据处理闭环已经形成
-- `epoll + 非阻塞 socket + Reactor` 已可支撑多客户端接入
-- WAL 恢复能力已经通过端到端脚本验证
-- benchmark、协议验证、demo 三条链路已经齐全
-
-只能部分达到的预期：
-
-- “高性能”可以成立，但应收敛到“当前原型已经具备较高吞吐”，不要扩写成绝对领先或工业级结论
-
-当前不能按开题原话写成已达成的部分：
-
-- 当前主线不是多线程 worker server
-- 线程池方案没有带来端到端收益，反而退化
-- 当前主线细粒度锁版本已经在读多写少场景下跑赢 `std_map_mutex`
-
-推荐结论口径：
-
-- 当前项目已经完成轻量级 KV-Store 的主线实现、恢复能力、并发接入能力和正式 benchmark 链路
-- 但多线程并行化方案未达到预期，且当前跳表实现尚未在对比实验中体现出优于 `std::map + mutex` 的性能优势
-
-## 8. 2026-04-09 锁粒度实验：分片跳表
-
-当前主线 `KVStore` 已经采用分片跳表。为了继续把“主线整合开销”和“纯结构收益”分开看，程序中仍保留一个结构镜像对照：
-
-- `skiplist_sharded`
-
-它与当前主线采用相同的分片跳表思路，但不承担 `KVStore` 主线封装本身的额外整合职责。
-
-### 8.1 答辩主比较：读多写少、预加载 100k
-
-命令：
-
-```text
-./bin/kvstore_compare_bench 5000 8 100000 read
-```
-
-关注 `8` 线程结果：
-
-| benchmark | throughput |
-| --- | ---: |
-| `std_map_mutex` | `873795.87 ops/s` |
-| `skiplist_sharded` | `2419362.06 ops/s` |
+- `kvstore_no_wal`
+- `kvstore_with_wal`
+- `std_map_mutex`
+- `std_map_mutex_wal`
 
 说明：
 
-- 这组现在更适合作为“纯结构镜像对照”
-- 当前答辩主比较应优先引用 `kvstore_no_wal` 与 `std_map_mutex`
+- `kvstore_no_wal` / `kvstore_with_wal` 对应当前节点级锁主线实现
+- `std_map_mutex` / `std_map_mutex_wal` 是原版红黑树基线
+- `*_wal` 使用 compare benchmark 内部补充的 WAL 包装，用于观察追加日志开销下的相对影响
 
-### 8.2 答辩主比较：读多写少、预加载 300k
+## 4. 当前主比较口径
 
-命令：
+论文和答辩里建议固定使用下面的主比较：
+
+- 无 WAL：`kvstore_no_wal` vs `std_map_mutex`
+- 有 WAL：`kvstore_with_wal` vs `std_map_mutex_wal`
+
+推荐 workload：
+
+- `read`
+  说明节点级锁跳表在读多写少、稳定数据规模下的吞吐优势
+- `mixed`
+  说明更接近日常读写混合场景的表现
+- `write`
+  说明写多场景下锁竞争与 WAL 开销的影响
+
+## 5. 当前分支的代表性结果
+
+以下结果来自：
 
 ```text
-./bin/kvstore_compare_bench 5000 8 300000 read
+./bin/kvstore_compare_bench 20000 8 100000 mixed
+./bin/kvstore_compare_bench 20000 8 100000 read
+./bin/kvstore_compare_bench 20000 8 100000 write
 ```
 
 关注 `8` 线程结果：
 
-| benchmark | throughput |
-| --- | ---: |
-| `std_map_mutex` | `658386.40 ops/s` |
-| `skiplist_sharded` | `1911372.71 ops/s` |
+| workload | `std_map_mutex` | `kvstore_no_wal` | `std_map_mutex_wal` | `kvstore_with_wal` |
+| --- | ---: | ---: | ---: | ---: |
+| `mixed` | `613721.45 ops/s` | `4596228.24 ops/s` | `222463.99 ops/s` | `199994.80 ops/s` |
+| `read` | `919778.04 ops/s` | `7855355.03 ops/s` | `545412.63 ops/s` | `769301.87 ops/s` |
+| `write` | `578380.03 ops/s` | `2827052.72 ops/s` | `137791.88 ops/s` | `128888.06 ops/s` |
 
-### 8.3 当前判断
+解读：
 
-- 这组结果强烈说明，当前原版 `SkipList` 的主要问题之一确实是锁粒度过粗
-- 一旦把 key 分散到多个跳表分片，读多写少场景下吞吐会明显上升
-- 即使在去掉主线封装影响的结构镜像对照里，`skiplist_sharded` 也明显超过 `std_map_mutex`
+- 节点级锁主线在无 WAL 场景下已经明显超过 `std_map_mutex`
+- 在 `read` workload 下优势最明显，符合论文“读写锁进一步细粒度化”的叙事
+- 引入 WAL 后，吞吐主要受同步写盘开销约束，但主线仍与红黑树基线保持相近或更优的相对表现
 
-### 8.4 WAL 补测：`std_map_mutex_wal` vs `skiplist_sharded_wal`
+## 6. 引用边界
 
-为补齐“带 WAL 后还能不能保持优势”这个问题，当前在 compare benchmark 中增加了实验性 WAL 包装对照项：
-
-- `std_map_mutex_wal`
-- `skiplist_sharded_wal`
-
-命令：
-
-```text
-./bin/kvstore_compare_bench 5000 8 100000 read
-./bin/kvstore_compare_bench 5000 8 300000 read
-```
-
-关注 `8` 线程结果：
-
-| preload | `std_map_mutex_wal` | `skiplist_sharded_wal` | 提升倍数 |
-| --- | ---: | ---: | ---: |
-| `100000` | `482484.93 ops/s` | `854925.36 ops/s` | `1.77x` |
-| `300000` | `416153.30 ops/s` | `917692.71 ops/s` | `2.21x` |
-
-当前判断：
-
-- 在这组进程内 WAL 结构镜像对照里，`skiplist_sharded_wal` 也已经超过 `std_map_mutex_wal`
-- 这说明细粒度锁思路在结构镜像层面同样成立
-- 正式结果说明应优先使用已经切换到细粒度锁的主线 `kvstore_with_wal`
-
-### 8.5 补充对照：`std_map_sharded`
-
-为了区分“数据结构收益”和“锁粒度收益”，当前程序中还保留了一个补充对照：
-
-- `std_map_sharded`
-
-它不作为主比较口径，但可用于内部分析。
-
-以 `./bin/kvstore_compare_bench 5000 8 100000 read` 的 `8` 线程结果为例：
-
-| benchmark | throughput |
-| --- | ---: |
-| `std_map_mutex` | `873795.87 ops/s` |
-| `std_map_sharded` | `4430013.92 ops/s` |
-| `skiplist_sharded` | `2419362.06 ops/s` |
-
-这说明：
-
-- 当前锁粒度优化本身带来的收益非常大
-- 当前实现下，`std_map_sharded` 仍快于 `skiplist_sharded`
-- 因此“跳表优势”在当前阶段应收敛表述为：细粒度锁跳表已经显著优于原版红黑树基线，而不是声称它已经优于所有分片化 `std::map` 实现
+- 正式性能结论只引用 `kvstore_bench` 和 `kvstore_compare_bench`
+- 协议回归、WAL 恢复脚本和 demo 页面不作为性能 benchmark 证据
+- 当前主线固定表述为“单线程 Reactor + 节点级锁跳表 + WAL”
+- 不把当前实现写成“多线程主线服务端”

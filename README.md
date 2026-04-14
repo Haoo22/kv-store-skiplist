@@ -197,17 +197,11 @@ BYE
 - `kvstore_with_wal`
 - `std_map_mutex`
 - `std_map_mutex_wal`
-- `skiplist_sharded`
-- `skiplist_sharded_wal`
-- `std_map_sharded`
-- `std_map_sharded_wal`
 
 其中：
 
 - `kvstore_no_wal` / `kvstore_with_wal` 现在就是毕设提交版主线实现
-- `skiplist_sharded` / `skiplist_sharded_wal` 仍保留在 compare benchmark 中，作为“分片提细粒度”的历史对照
 - `*_wal` 系列用于观察追加日志开销下的相对表现
-- `std_map_sharded` 是更公平的补充对照，不作为主比较口径
 
 ## 7. 实验结果
 
@@ -253,7 +247,7 @@ BYE
 | `100000` | `619595.15 ops/s` | `1867065.15 ops/s` | `3.01x` |
 | `300000` | `410030.13 ops/s` | `2013055.88 ops/s` | `4.91x` |
 
-- 当前毕设主线已经采用细粒度分片跳表
+- 当前毕设主线已经采用节点级锁跳表
 - 在读多写少、稳定数据规模场景下，主线版本已经明显超过原版 `std::map + mutex` 基线
 
 ### 7.3 WAL 主比较：主线细粒度锁 KVStore vs 原版红黑树基线
@@ -279,7 +273,6 @@ BYE
 
 - 主线版本在带 WAL 时也已经超过 `std_map_mutex_wal`
 - 这说明细粒度锁主线在追加日志开销下仍然保持相对优势
-- `skiplist_sharded_wal` 现在更适合作为结构镜像对照，而不是主叙事主体
 
 ### 7.4 主线网络 benchmark
 

@@ -1,5 +1,4 @@
 #include "kvstore/kvstore.hpp"
-#include "kvstore/SkipList.hpp"
 #include "kvstore/WAL.hpp"
 
 #include <chrono>
@@ -71,113 +70,6 @@ struct MapStore {
 private:
     std::mutex mutex_;
     std::map<std::string, std::string> data_;
-};
-
-class ShardedMapStore {
-public:
-    explicit ShardedMapStore(std::size_t shard_count = 16)
-        : shards_(shard_count == 0 ? 1 : shard_count) {}
-
-    bool Put(const std::string& key, const std::string& value) {
-        Shard& shard = ShardFor(key);
-        std::lock_guard<std::mutex> lock(shard.mutex);
-        const auto result = shard.data.insert(std::make_pair(key, value));
-        if (!result.second) {
-            result.first->second = value;
-        }
-        return result.second;
-    }
-
-    bool Get(const std::string& key, std::string* value) {
-        Shard& shard = ShardFor(key);
-        std::lock_guard<std::mutex> lock(shard.mutex);
-        const auto iterator = shard.data.find(key);
-        if (iterator == shard.data.end()) {
-            return false;
-        }
-        if (value != nullptr) {
-            *value = iterator->second;
-        }
-        return true;
-    }
-
-    bool Delete(const std::string& key) {
-        Shard& shard = ShardFor(key);
-        std::lock_guard<std::mutex> lock(shard.mutex);
-        return shard.data.erase(key) > 0;
-    }
-
-    std::size_t Size() {
-        std::size_t total = 0;
-        for (Shard& shard : shards_) {
-            std::lock_guard<std::mutex> lock(shard.mutex);
-            total += shard.data.size();
-        }
-        return total;
-    }
-
-private:
-    struct Shard {
-        std::mutex mutex;
-        std::map<std::string, std::string> data;
-    };
-
-    Shard& ShardFor(const std::string& key) {
-        return shards_[ShardIndex(key)];
-    }
-
-    std::size_t ShardIndex(const std::string& key) const {
-        return hasher_(key) % shards_.size();
-    }
-
-    std::vector<Shard> shards_;
-    std::hash<std::string> hasher_;
-};
-
-class ShardedSkipListStore {
-public:
-    explicit ShardedSkipListStore(std::size_t shard_count = 16)
-        : shards_(shard_count == 0 ? 1 : shard_count) {
-        for (std::unique_ptr<kvstore::SkipList<std::string, std::string>>& shard : shards_) {
-            shard = std::make_unique<kvstore::SkipList<std::string, std::string>>();
-        }
-    }
-
-    bool Put(const std::string& key, const std::string& value) {
-        return ShardFor(key).Put(key, value);
-    }
-
-    bool Get(const std::string& key, std::string* value) {
-        return ShardFor(key).Get(key, value);
-    }
-
-    bool Delete(const std::string& key) {
-        return ShardFor(key).Delete(key);
-    }
-
-    std::size_t Size() {
-        std::size_t total = 0;
-        for (const std::unique_ptr<kvstore::SkipList<std::string, std::string>>& shard : shards_) {
-            total += shard->Size();
-        }
-        return total;
-    }
-
-private:
-    kvstore::SkipList<std::string, std::string>& ShardFor(const std::string& key) {
-        return *shards_[ShardIndex(key)];
-    }
-
-    const kvstore::SkipList<std::string, std::string>& ShardFor(const std::string& key) const {
-        return *shards_[ShardIndex(key)];
-    }
-
-    std::size_t ShardIndex(const std::string& key) const {
-        return hasher_(key) % shards_.size();
-    }
-
-    std::vector<std::unique_ptr<kvstore::SkipList<std::string, std::string>>> shards_;
-    std::hash<std::string> hasher_;
 };
 
 template <typename Store>
@@ -385,14 +277,6 @@ std::size_t MapStoreSize(MapStore* store) {
     return store->Size();
 }
 
-std::size_t ShardedMapStoreSize(ShardedMapStore* store) {
-    return store->Size();
-}
-
-std::size_t ShardedSkipListStoreSize(ShardedSkipListStore* store) {
-    return store->Size();
-}
-
 template <typename Store>
 std::size_t WalBackedStoreSize(WalBackedStore<Store>* store) {
     return store->Size();
@@ -560,61 +444,6 @@ int main(int argc, char** argv) {
             RemoveFileIfExists(wal_path);
         }
 
-        {
-            ShardedMapStore store;
-            PreloadStore(&store, preload_keys);
-            PrintResult(RunBenchmark("std_map_sharded",
-                                     &store,
-                                     thread_count,
-                                     operations_per_thread,
-                                     preload_keys,
-                                     workload_mode,
-                                     &ShardedMapStoreSize));
-        }
-
-        {
-            const std::string wal_path = TempWalPath("compare-std-map-sharded-wal-" +
-                                                     std::to_string(thread_count) + ".log");
-            RemoveFileIfExists(wal_path);
-            WalBackedStore<ShardedMapStore> store(wal_path, 10);
-            PreloadStore(&store, preload_keys);
-            PrintResult(RunBenchmark("std_map_sharded_wal",
-                                     &store,
-                                     thread_count,
-                                     operations_per_thread,
-                                     preload_keys,
-                                     workload_mode,
-                                     &WalBackedStoreSize<ShardedMapStore>));
-            RemoveFileIfExists(wal_path);
-        }
-
-        {
-            ShardedSkipListStore store;
-            PreloadStore(&store, preload_keys);
-            PrintResult(RunBenchmark("skiplist_sharded",
-                                     &store,
-                                     thread_count,
-                                     operations_per_thread,
-                                     preload_keys,
-                                     workload_mode,
-                                     &ShardedSkipListStoreSize));
-        }
-
-        {
-            const std::string wal_path = TempWalPath("compare-skiplist-sharded-wal-" +
-                                                     std::to_string(thread_count) + ".log");
-            RemoveFileIfExists(wal_path);
-            WalBackedStore<ShardedSkipListStore> store(wal_path, 10);
-            PreloadStore(&store, preload_keys);
-            PrintResult(RunBenchmark("skiplist_sharded_wal",
-                                     &store,
-                                     thread_count,
-                                     operations_per_thread,
-                                     preload_keys,
-                                     workload_mode,
-                                     &WalBackedStoreSize<ShardedSkipListStore>));
-            RemoveFileIfExists(wal_path);
-        }
     }
 
     return 0;
