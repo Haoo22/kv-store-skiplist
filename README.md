@@ -10,7 +10,7 @@
 - 文本协议：`\r\n` 分隔，支持粘包半包处理
 - 配套工具：客户端、正式 benchmark、恢复验证脚本、答辩 demo
 
-当前工程构建标准为 C++14；当前主线 `KVStore` 已采用分片跳表实现细粒度锁控制，每个分片内部仍使用 `std::shared_timed_mutex` 作为读写锁。
+当前工程构建标准为 C++14；当前主线 `KVStore` 已回到单跳表索引，`SkipList` 内部采用节点级锁控制并发读写。
 
 ## 1. 当前口径
 
@@ -205,7 +205,7 @@ BYE
 其中：
 
 - `kvstore_no_wal` / `kvstore_with_wal` 现在就是毕设提交版主线实现
-- `skiplist_sharded` / `skiplist_sharded_wal` 仍保留在 compare benchmark 中，作为主线分片索引的结构镜像对照
+- `skiplist_sharded` / `skiplist_sharded_wal` 仍保留在 compare benchmark 中，作为“分片提细粒度”的历史对照
 - `*_wal` 系列用于观察追加日志开销下的相对表现
 - `std_map_sharded` 是更公平的补充对照，不作为主比较口径
 

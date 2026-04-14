@@ -1,13 +1,14 @@
 #pragma once
 
-#include <array>
+#include <algorithm>
+#include <atomic>
 #include <cstddef>
 #include <functional>
-#include <limits>
 #include <memory>
 #include <mutex>
 #include <random>
 #include <shared_mutex>
+#include <thread>
 #include <utility>
 #include <vector>
 
@@ -23,10 +24,10 @@ public:
                       Compare compare = Compare())
         : max_level_(max_level == 0 ? 1 : max_level),
           probability_(probability <= 0.0 || probability >= 1.0 ? 0.5 : probability),
+          compare_(std::move(compare)),
+          head_(std::make_unique<Node>(max_level_ - 1, Key{}, Value{})),
           current_level_(1),
           size_(0),
-          compare_(std::move(compare)),
-          head_(std::make_unique<Node>(max_level_, Key{}, Value{})),
           random_engine_(std::random_device{}()),
           level_distribution_(probability_) {}
 
@@ -34,90 +35,137 @@ public:
     SkipList& operator=(const SkipList&) = delete;
     SkipList(SkipList&&) = delete;
     SkipList& operator=(SkipList&&) = delete;
+
     ~SkipList() {
         Clear();
     }
 
     bool Put(const Key& key, const Value& value) {
-        std::unique_lock<std::shared_timed_mutex> lock(mutex_);
-        std::vector<Node*> update(max_level_, head_.get());
-        auto current = FindPredecessors(key, update);
+        std::shared_lock<std::shared_timed_mutex> lifecycle_lock(lifecycle_mutex_);
 
-        if (current != nullptr && KeysEqual(current->key, key)) {
-            current->value = value;
-            return false;
-        }
-
-        const std::size_t node_level = RandomLevel();
-        if (node_level > current_level_) {
-            for (std::size_t level = current_level_; level < node_level; ++level) {
-                update[level] = head_.get();
+        while (true) {
+            std::vector<Node*> predecessors(max_level_, nullptr);
+            std::vector<Node*> successors(max_level_, nullptr);
+            const int found_level = FindNode(key, predecessors, successors);
+            if (found_level >= 0) {
+                Node* existing = successors[static_cast<std::size_t>(found_level)];
+                std::unique_lock<std::mutex> node_lock(existing->mutex);
+                if (existing->marked.load(std::memory_order_acquire)) {
+                    continue;
+                }
+                if (!existing->fully_linked.load(std::memory_order_acquire)) {
+                    std::this_thread::yield();
+                    continue;
+                }
+                existing->value = value;
+                return false;
             }
-            current_level_ = node_level;
-        }
 
-        std::unique_ptr<Node> new_node = std::make_unique<Node>(node_level, key, value);
-        Node* new_node_ptr = new_node.get();
-        for (std::size_t level = 0; level < node_level; ++level) {
-            if (level == 0) {
-                new_node->next = std::move(update[level]->next);
-                new_node_ptr->forward[level] = new_node->next.get();
-                update[level]->next = std::move(new_node);
-                update[level]->forward[level] = update[level]->next.get();
+            const std::size_t node_level = RandomLevel() - 1;
+            std::vector<Node*> lock_targets;
+            lock_targets.reserve(node_level + 1);
+            for (std::size_t level = 0; level <= node_level; ++level) {
+                lock_targets.push_back(predecessors[level]);
+            }
+
+            const auto locks = LockNodes(lock_targets);
+            if (!CanInsert(predecessors, successors, node_level)) {
                 continue;
             }
 
-            new_node_ptr->forward[level] = update[level]->forward[level];
-            update[level]->forward[level] = new_node_ptr;
-        }
+            auto new_node = std::make_unique<Node>(node_level, key, value);
+            Node* new_node_ptr = new_node.get();
+            for (std::size_t level = 0; level <= node_level; ++level) {
+                new_node_ptr->forward[level].store(successors[level], std::memory_order_relaxed);
+            }
 
-        ++size_;
-        return true;
+            {
+                std::lock_guard<std::mutex> ownership_lock(ownership_mutex_);
+                owned_nodes_.push_back(std::move(new_node));
+            }
+
+            for (std::size_t level = 0; level <= node_level; ++level) {
+                predecessors[level]->forward[level].store(new_node_ptr, std::memory_order_release);
+            }
+
+            new_node_ptr->fully_linked.store(true, std::memory_order_release);
+            size_.fetch_add(1, std::memory_order_relaxed);
+            RaiseCurrentLevel(node_level + 1);
+            return true;
+        }
     }
 
     bool Get(const Key& key, Value* value) const {
-        std::shared_lock<std::shared_timed_mutex> lock(mutex_);
-        auto current = FindNode(key);
-        if (current == nullptr) {
+        std::shared_lock<std::shared_timed_mutex> lifecycle_lock(lifecycle_mutex_);
+
+        Node* candidate = FindNodeNoLock(key);
+        if (candidate == nullptr) {
+            return false;
+        }
+        if (candidate->marked.load(std::memory_order_acquire) ||
+            !candidate->fully_linked.load(std::memory_order_acquire)) {
+            return false;
+        }
+
+        std::lock_guard<std::mutex> node_lock(candidate->mutex);
+        if (candidate->marked.load(std::memory_order_acquire) ||
+            !candidate->fully_linked.load(std::memory_order_acquire)) {
             return false;
         }
 
         if (value != nullptr) {
-            *value = current->value;
+            *value = candidate->value;
         }
         return true;
     }
 
     bool Delete(const Key& key) {
-        std::unique_lock<std::shared_timed_mutex> lock(mutex_);
-        std::vector<Node*> update(max_level_, head_.get());
-        auto current = FindPredecessors(key, update);
+        std::shared_lock<std::shared_timed_mutex> lifecycle_lock(lifecycle_mutex_);
 
-        if (current == nullptr || !KeysEqual(current->key, key)) {
-            return false;
-        }
+        while (true) {
+            std::vector<Node*> predecessors(max_level_, nullptr);
+            std::vector<Node*> successors(max_level_, nullptr);
+            const int found_level = FindNode(key, predecessors, successors);
+            if (found_level < 0) {
+                return false;
+            }
 
-        for (std::size_t level = 0; level < current_level_; ++level) {
-            if (update[level]->forward[level] != current) {
+            Node* victim = successors[static_cast<std::size_t>(found_level)];
+            if (victim == nullptr) {
+                return false;
+            }
+
+            const std::size_t victim_level = victim->top_level;
+            std::vector<Node*> lock_targets;
+            lock_targets.reserve(victim_level + 2);
+            for (std::size_t level = 0; level <= victim_level; ++level) {
+                lock_targets.push_back(predecessors[level]);
+            }
+            lock_targets.push_back(victim);
+
+            const auto locks = LockNodes(lock_targets);
+            if (!victim->fully_linked.load(std::memory_order_acquire) ||
+                victim->marked.load(std::memory_order_acquire) ||
+                !KeysEqual(victim->key, key) ||
+                !CanDelete(predecessors, victim)) {
                 continue;
             }
-            update[level]->forward[level] = current->forward[level];
+
+            victim->marked.store(true, std::memory_order_release);
+            for (std::size_t level = victim_level + 1; level > 0; --level) {
+                predecessors[level - 1]->forward[level - 1].store(
+                    victim->forward[level - 1].load(std::memory_order_acquire),
+                    std::memory_order_release);
+            }
+
+            size_.fetch_sub(1, std::memory_order_relaxed);
+            RecomputeCurrentLevel();
+            return true;
         }
-
-        std::unique_ptr<Node> removed = std::move(update[0]->next);
-        update[0]->next = std::move(removed->next);
-        update[0]->forward[0] = update[0]->next.get();
-
-        while (current_level_ > 1 && head_->forward[current_level_ - 1] == nullptr) {
-            --current_level_;
-        }
-
-        --size_;
-        return true;
     }
 
     std::vector<value_type> Scan(const Key& start, const Key& end) const {
-        std::shared_lock<std::shared_timed_mutex> lock(mutex_);
+        std::shared_lock<std::shared_timed_mutex> lifecycle_lock(lifecycle_mutex_);
         std::vector<value_type> result;
 
         if (compare_(end, start)) {
@@ -125,25 +173,34 @@ public:
         }
 
         Node* current = head_.get();
-        for (std::size_t level = current_level_; level > 0; --level) {
-            while (current->forward[level - 1] != nullptr &&
-                   compare_(current->forward[level - 1]->key, start)) {
-                current = current->forward[level - 1];
+        const std::size_t active_levels = current_level_.load(std::memory_order_acquire);
+        for (std::size_t level = active_levels; level > 0; --level) {
+            Node* next = current->forward[level - 1].load(std::memory_order_acquire);
+            while (next != nullptr && compare_(next->key, start)) {
+                current = next;
+                next = current->forward[level - 1].load(std::memory_order_acquire);
             }
         }
 
-        current = current->forward[0];
+        current = current->forward[0].load(std::memory_order_acquire);
         while (current != nullptr && !compare_(end, current->key)) {
-            result.emplace_back(current->key, current->value);
-            current = current->forward[0];
+            if (!current->marked.load(std::memory_order_acquire) &&
+                current->fully_linked.load(std::memory_order_acquire)) {
+                std::lock_guard<std::mutex> node_lock(current->mutex);
+                if (!current->marked.load(std::memory_order_acquire) &&
+                    current->fully_linked.load(std::memory_order_acquire)) {
+                    result.emplace_back(current->key, current->value);
+                }
+            }
+            current = current->forward[0].load(std::memory_order_acquire);
         }
 
         return result;
     }
 
     std::size_t Size() const noexcept {
-        std::shared_lock<std::shared_timed_mutex> lock(mutex_);
-        return size_;
+        std::shared_lock<std::shared_timed_mutex> lifecycle_lock(lifecycle_mutex_);
+        return size_.load(std::memory_order_acquire);
     }
 
     bool Empty() const noexcept {
@@ -151,56 +208,146 @@ public:
     }
 
     void Clear() {
-        std::unique_lock<std::shared_timed_mutex> lock(mutex_);
-        ReleaseAllNodes();
+        std::unique_lock<std::shared_timed_mutex> lifecycle_lock(lifecycle_mutex_);
         for (std::size_t level = 0; level < max_level_; ++level) {
-            head_->forward[level] = nullptr;
+            head_->forward[level].store(nullptr, std::memory_order_release);
         }
-        current_level_ = 1;
-        size_ = 0;
+
+        {
+            std::lock_guard<std::mutex> ownership_lock(ownership_mutex_);
+            owned_nodes_.clear();
+        }
+
+        current_level_.store(1, std::memory_order_release);
+        size_.store(0, std::memory_order_release);
     }
 
     std::size_t CurrentLevel() const noexcept {
-        std::shared_lock<std::shared_timed_mutex> lock(mutex_);
-        return current_level_;
+        std::shared_lock<std::shared_timed_mutex> lifecycle_lock(lifecycle_mutex_);
+        return current_level_.load(std::memory_order_acquire);
     }
 
 private:
     struct Node {
-        Node(std::size_t level, Key node_key, Value node_value)
+        Node(std::size_t node_top_level, Key node_key, Value node_value)
             : key(std::move(node_key)),
               value(std::move(node_value)),
-              forward(level, nullptr) {}
+              top_level(node_top_level),
+              forward(node_top_level + 1),
+              marked(false),
+              fully_linked(false) {
+            for (std::atomic<Node*>& pointer : forward) {
+                pointer.store(nullptr, std::memory_order_relaxed);
+            }
+        }
 
         Key key;
         Value value;
-        std::unique_ptr<Node> next;
-        std::vector<Node*> forward;
+        const std::size_t top_level;
+        mutable std::mutex mutex;
+        std::vector<std::atomic<Node*>> forward;
+        std::atomic<bool> marked;
+        std::atomic<bool> fully_linked;
     };
+
+    static std::vector<std::unique_lock<std::mutex>> LockNodes(std::vector<Node*> nodes) {
+        std::sort(nodes.begin(), nodes.end());
+        nodes.erase(std::unique(nodes.begin(), nodes.end()), nodes.end());
+
+        std::vector<std::unique_lock<std::mutex>> locks;
+        locks.reserve(nodes.size());
+        for (Node* node : nodes) {
+            if (node != nullptr) {
+                locks.emplace_back(node->mutex);
+            }
+        }
+        return locks;
+    }
 
     bool KeysEqual(const Key& lhs, const Key& rhs) const {
         return !compare_(lhs, rhs) && !compare_(rhs, lhs);
     }
 
-    Node* FindPredecessors(const Key& key, std::vector<Node*>& update) const {
-        Node* current = head_.get();
-        for (std::size_t level = current_level_; level > 0; --level) {
-            while (current->forward[level - 1] != nullptr &&
-                   compare_(current->forward[level - 1]->key, key)) {
-                current = current->forward[level - 1];
+    int FindNode(const Key& key,
+                 std::vector<Node*>& predecessors,
+                 std::vector<Node*>& successors) const {
+        Node* predecessor = head_.get();
+        int found_level = -1;
+        const std::size_t active_levels = current_level_.load(std::memory_order_acquire);
+
+        for (std::size_t level = active_levels; level > 0; --level) {
+            Node* current = predecessor->forward[level - 1].load(std::memory_order_acquire);
+            while (current != nullptr && compare_(current->key, key)) {
+                predecessor = current;
+                current = predecessor->forward[level - 1].load(std::memory_order_acquire);
             }
-            update[level - 1] = current;
+
+            if (found_level == -1 && current != nullptr && KeysEqual(current->key, key)) {
+                found_level = static_cast<int>(level - 1);
+            }
+            predecessors[level - 1] = predecessor;
+            successors[level - 1] = current;
         }
-        return current->forward[0];
+
+        for (std::size_t level = active_levels; level < max_level_; ++level) {
+            predecessors[level] = head_.get();
+            successors[level] = nullptr;
+        }
+
+        return found_level;
     }
 
-    Node* FindNode(const Key& key) const {
-        std::vector<Node*> update(max_level_, head_.get());
-        auto current = FindPredecessors(key, update);
-        if (current != nullptr && KeysEqual(current->key, key)) {
-            return current;
+    Node* FindNodeNoLock(const Key& key) const {
+        Node* predecessor = head_.get();
+        const std::size_t active_levels = current_level_.load(std::memory_order_acquire);
+
+        for (std::size_t level = active_levels; level > 0; --level) {
+            Node* current = predecessor->forward[level - 1].load(std::memory_order_acquire);
+            while (current != nullptr && compare_(current->key, key)) {
+                predecessor = current;
+                current = predecessor->forward[level - 1].load(std::memory_order_acquire);
+            }
+        }
+
+        Node* candidate = predecessor->forward[0].load(std::memory_order_acquire);
+        if (candidate != nullptr && KeysEqual(candidate->key, key)) {
+            return candidate;
         }
         return nullptr;
+    }
+
+    bool CanInsert(const std::vector<Node*>& predecessors,
+                   const std::vector<Node*>& successors,
+                   std::size_t node_level) const {
+        for (std::size_t level = 0; level <= node_level; ++level) {
+            Node* predecessor = predecessors[level];
+            Node* successor = successors[level];
+            if (predecessor == nullptr) {
+                return false;
+            }
+            if (predecessor->marked.load(std::memory_order_acquire)) {
+                return false;
+            }
+            if (successor != nullptr && successor->marked.load(std::memory_order_acquire)) {
+                return false;
+            }
+            if (predecessor->forward[level].load(std::memory_order_acquire) != successor) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    bool CanDelete(const std::vector<Node*>& predecessors, Node* victim) const {
+        for (std::size_t level = 0; level <= victim->top_level; ++level) {
+            Node* predecessor = predecessors[level];
+            if (predecessor == nullptr ||
+                predecessor->marked.load(std::memory_order_acquire) ||
+                predecessor->forward[level].load(std::memory_order_acquire) != victim) {
+                return false;
+            }
+        }
+        return true;
     }
 
     std::size_t RandomLevel() {
@@ -211,21 +358,35 @@ private:
         return level;
     }
 
-    void ReleaseAllNodes() {
-        while (head_->next != nullptr) {
-            std::unique_ptr<Node> node = std::move(head_->next);
-            head_->next = std::move(node->next);
+    void RaiseCurrentLevel(std::size_t candidate) {
+        std::size_t observed = current_level_.load(std::memory_order_acquire);
+        while (candidate > observed &&
+               !current_level_.compare_exchange_weak(observed,
+                                                     candidate,
+                                                     std::memory_order_release,
+                                                     std::memory_order_acquire)) {
         }
+    }
+
+    void RecomputeCurrentLevel() {
+        std::size_t level = max_level_;
+        while (level > 1 &&
+               head_->forward[level - 1].load(std::memory_order_acquire) == nullptr) {
+            --level;
+        }
+        current_level_.store(level, std::memory_order_release);
     }
 
     const std::size_t max_level_;
     const double probability_;
-
-    mutable std::shared_timed_mutex mutex_;
-    std::size_t current_level_;
-    std::size_t size_;
     Compare compare_;
+
+    mutable std::shared_timed_mutex lifecycle_mutex_;
+    mutable std::mutex ownership_mutex_;
     std::unique_ptr<Node> head_;
+    std::vector<std::unique_ptr<Node>> owned_nodes_;
+    std::atomic<std::size_t> current_level_;
+    std::atomic<std::size_t> size_;
     mutable std::mt19937 random_engine_;
     mutable std::bernoulli_distribution level_distribution_;
 };

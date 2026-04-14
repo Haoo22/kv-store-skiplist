@@ -4,9 +4,11 @@
 #include "kvstore/WAL.hpp"
 
 #include <cstdlib>
-#include <iostream>
 #include <fstream>
+#include <iostream>
 #include <string>
+#include <thread>
+#include <vector>
 
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -171,6 +173,63 @@ int main() {
                "protocol unknown command");
 
         RemoveFileIfExists(protocol_options.wal_path);
+    }
+
+    {
+        kvstore::SkipList<int, std::string> concurrent_skip_list;
+        std::vector<std::thread> writers;
+        for (int thread_index = 0; thread_index < 4; ++thread_index) {
+            writers.emplace_back([thread_index, &concurrent_skip_list]() {
+                for (int offset = 0; offset < 200; ++offset) {
+                    const int key = (thread_index * 1000) + offset;
+                    static_cast<void>(concurrent_skip_list.Put(
+                        key,
+                        "value-" + std::to_string(thread_index) + "-" + std::to_string(offset)));
+                }
+            });
+        }
+        for (std::thread& writer : writers) {
+            writer.join();
+        }
+
+        Ensure(concurrent_skip_list.Size() == 800, "concurrent inserts should preserve all keys");
+
+        std::vector<std::thread> readers;
+        for (int thread_index = 0; thread_index < 4; ++thread_index) {
+            readers.emplace_back([thread_index, &concurrent_skip_list]() {
+                for (int offset = 0; offset < 200; ++offset) {
+                    const int key = (thread_index * 1000) + offset;
+                    std::string read_value;
+                    Ensure(concurrent_skip_list.Get(key, &read_value),
+                           "concurrent get should find inserted key");
+                }
+            });
+        }
+        for (std::thread& reader : readers) {
+            reader.join();
+        }
+
+        std::vector<std::thread> deleters;
+        for (int thread_index = 0; thread_index < 4; ++thread_index) {
+            deleters.emplace_back([thread_index, &concurrent_skip_list]() {
+                for (int offset = 0; offset < 100; ++offset) {
+                    const int key = (thread_index * 1000) + offset;
+                    Ensure(concurrent_skip_list.Delete(key),
+                           "concurrent delete should remove existing key");
+                }
+            });
+        }
+        for (std::thread& deleter : deleters) {
+            deleter.join();
+        }
+
+        Ensure(concurrent_skip_list.Size() == 400, "concurrent deletes should update size");
+        const auto concurrent_range = concurrent_skip_list.Scan(0, 5000);
+        Ensure(concurrent_range.size() == 400, "range after concurrent delete should match size");
+        for (std::size_t index = 1; index < concurrent_range.size(); ++index) {
+            Ensure(concurrent_range[index - 1].first < concurrent_range[index].first,
+                   "range after concurrent operations should remain ordered");
+        }
     }
 
     RemoveFileIfExists(options.wal_path);
