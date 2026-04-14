@@ -96,6 +96,7 @@ public:
 
     bool Get(const Key& key, Value* value) const {
         std::shared_lock<std::shared_timed_mutex> lifecycle_lock(lifecycle_mutex_);
+        std::shared_lock<std::shared_timed_mutex> range_lock(range_mutex_);
 
         Node* candidate = FindNodeNoLock(key);
         if (candidate == nullptr) {
@@ -159,6 +160,7 @@ public:
             }
 
             size_.fetch_sub(1, std::memory_order_relaxed);
+            ReclaimNode(victim);
             RecomputeCurrentLevel();
             return true;
         }
@@ -386,6 +388,19 @@ private:
             --level;
         }
         current_level_.store(level, std::memory_order_release);
+    }
+
+    void ReclaimNode(Node* victim) {
+        std::lock_guard<std::mutex> ownership_lock(ownership_mutex_);
+        const auto iterator = std::find_if(
+            owned_nodes_.begin(),
+            owned_nodes_.end(),
+            [victim](const std::unique_ptr<Node>& node) {
+                return node.get() == victim;
+            });
+        if (iterator != owned_nodes_.end()) {
+            owned_nodes_.erase(iterator);
+        }
     }
 
     const std::size_t max_level_;

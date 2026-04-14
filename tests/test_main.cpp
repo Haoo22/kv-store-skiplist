@@ -307,6 +307,32 @@ int main() {
                "consistency scan test should restore full key set");
     }
 
+    {
+        kvstore::SkipList<int, std::string> churn_skip_list;
+        for (int round = 0; round < 20; ++round) {
+            for (int key = 0; key < 1000; ++key) {
+                static_cast<void>(churn_skip_list.Put(
+                    key,
+                    "round-" + std::to_string(round) + "-" + std::to_string(key)));
+            }
+            for (int key = 0; key < 1000; ++key) {
+                Ensure(churn_skip_list.Delete(key),
+                       "churn delete should remove previously inserted key");
+            }
+            Ensure(churn_skip_list.Empty(), "churn skip list should return to empty state");
+        }
+
+        for (int key = 0; key < 1000; ++key) {
+            static_cast<void>(churn_skip_list.Put(key, "final-" + std::to_string(key)));
+        }
+        const auto churn_range = churn_skip_list.Scan(0, 999);
+        Ensure(churn_range.size() == 1000, "churn test should preserve final inserts");
+        for (std::size_t index = 1; index < churn_range.size(); ++index) {
+            Ensure(churn_range[index - 1].first < churn_range[index].first,
+                   "churn range should remain ordered after repeated reuse");
+        }
+    }
+
     RemoveFileIfExists(options.wal_path);
     RemoveFileIfExists(wal_path);
 
