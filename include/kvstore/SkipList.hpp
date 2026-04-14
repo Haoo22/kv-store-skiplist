@@ -350,7 +350,7 @@ private:
 
     std::size_t RandomLevel() const {
         thread_local std::mt19937 engine(SeedForThread());
-        thread_local std::bernoulli_distribution distribution(probability_);
+        std::bernoulli_distribution distribution(probability_);
         std::size_t level = 1;
         while (level < max_level_ && distribution(engine)) {
             ++level;

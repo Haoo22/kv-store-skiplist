@@ -24,7 +24,8 @@ void Ensure(bool condition, const std::string& message) {
 }
 
 std::string MakeWalPath(const std::string& name) {
-    const std::string directory = "/tmp/kvstore-tests";
+    const std::string directory =
+        "/tmp/kvstore-tests-" + std::to_string(static_cast<long long>(::getpid()));
     ::mkdir(directory.c_str(), 0755);
     return directory + "/" + name;
 }
