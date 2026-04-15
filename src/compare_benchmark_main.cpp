@@ -21,6 +21,7 @@ namespace {
 enum class WorkloadMode {
     kMixed,
     kReadHeavy,
+    kReadHeavyAll,
     kWriteHeavy,
 };
 
@@ -62,6 +63,22 @@ struct MapStore {
         return data_.erase(key) > 0;
     }
 
+    std::vector<std::pair<std::string, std::string>> Scan(const std::string& start,
+                                                          const std::string& end) {
+        std::lock_guard<std::mutex> lock(mutex_);
+        std::vector<std::pair<std::string, std::string>> result;
+        if (end < start) {
+            return result;
+        }
+
+        auto iterator = data_.lower_bound(start);
+        while (iterator != data_.end() && iterator->first <= end) {
+            result.push_back(*iterator);
+            ++iterator;
+        }
+        return result;
+    }
+
     std::size_t Size() {
         std::lock_guard<std::mutex> lock(mutex_);
         return data_.size();
@@ -100,6 +117,11 @@ public:
         return store_.Delete(key);
     }
 
+    std::vector<std::pair<std::string, std::string>> Scan(const std::string& start,
+                                                          const std::string& end) {
+        return store_.Scan(start, end);
+    }
+
     std::size_t Size() {
         return store_.Size();
     }
@@ -124,6 +146,9 @@ WorkloadMode ParseWorkloadMode(const std::string& text) {
     if (text == "read") {
         return WorkloadMode::kReadHeavy;
     }
+    if (text == "read-all") {
+        return WorkloadMode::kReadHeavyAll;
+    }
     if (text == "write") {
         return WorkloadMode::kWriteHeavy;
     }
@@ -136,6 +161,8 @@ const char* WorkloadModeName(WorkloadMode mode) {
         return "mixed";
     case WorkloadMode::kReadHeavy:
         return "read";
+    case WorkloadMode::kReadHeavyAll:
+        return "read-all";
     case WorkloadMode::kWriteHeavy:
         return "write";
     }
@@ -148,6 +175,8 @@ const char* WorkloadModeDescription(WorkloadMode mode) {
         return "40% PUT, 50% GET, 10% DELETE/PUT+GET";
     case WorkloadMode::kReadHeavy:
         return "90% GET, 10% PUT";
+    case WorkloadMode::kReadHeavyAll:
+        return "75% GET, 10% SCAN, 10% PUT, 5% DELETE";
     case WorkloadMode::kWriteHeavy:
         return "80% PUT, 10% GET, 10% DELETE";
     }
@@ -184,6 +213,26 @@ BenchmarkResult RunBenchmark(const std::string& name,
                 const std::string read_key = "seed-key-" + std::to_string(preload_index);
                 const std::string write_key = "key-" + std::to_string(global_index);
                 const std::string payload = "value-" + std::to_string(operation);
+
+                if (workload_mode == WorkloadMode::kReadHeavyAll) {
+                    switch (operation % 20) {
+                    case 0:
+                    case 1:
+                        static_cast<void>(store->Put(write_key, payload));
+                        break;
+                    case 2:
+                        static_cast<void>(store->Delete(read_key));
+                        break;
+                    case 3:
+                    case 4:
+                        static_cast<void>(store->Scan(read_key, read_key));
+                        break;
+                    default:
+                        static_cast<void>(store->Get(read_key, &value));
+                        break;
+                    }
+                    continue;
+                }
 
                 if (workload_mode == WorkloadMode::kReadHeavy) {
                     if ((operation % 10) == 0) {
@@ -311,11 +360,11 @@ void PrintResult(const BenchmarkResult& result) {
 
 void PrintUsage() {
     std::cerr << "Usage: ./bin/kvstore_compare_bench [ops_per_thread] [max_threads]"
-                 " [preload_keys>=0] [mixed|read|write]\n"
+                 " [preload_keys>=0] [mixed|read|read-all|write]\n"
                  "  ops_per_thread: operations executed by each thread (default 20000)\n"
                  "  max_threads: maximum thread count in 1/2/4/... sweep (default 8)\n"
                  "  preload_keys: keys inserted before the benchmark starts (default 0)\n"
-                 "  workload: mixed | read | write (default mixed)\n";
+                 "  workload: mixed | read | read-all | write (default mixed)\n";
 }
 
 int ParsePositiveInt(const char* text, const char* field_name) {

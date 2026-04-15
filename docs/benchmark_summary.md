@@ -14,12 +14,14 @@
 ## 2. 测试命令
 
 ```text
-./bin/kvstore_compare_bench 20000 8 100000 mixed
+./bin/kvstore_compare_bench 20000 8 100000 read-all
 ./bin/kvstore_compare_bench 20000 8 100000 read
 ./bin/kvstore_compare_bench 20000 8 100000 write
 ```
 
 每条命令都会输出 `1/2/4/8` 线程下各实现的吞吐和平均延迟。
+
+其中 `read-all` 是读多写少并覆盖所有存储操作的 workload：`75% GET`、`10% SCAN`、`10% PUT`、`5% DELETE`。
 
 ## 3. 代表性结果
 
@@ -27,14 +29,17 @@
 
 | workload | `std_map_mutex` | `kvstore_no_wal` | `std_map_mutex_wal` | `kvstore_with_wal` |
 | --- | ---: | ---: | ---: | ---: |
-| `mixed` | `543344.79 ops/s` | `118476.74 ops/s` | `186216.23 ops/s` | `68322.00 ops/s` |
-| `read` | `881290.59 ops/s` | `299732.26 ops/s` | `481873.88 ops/s` | `213193.37 ops/s` |
-| `write` | `540828.77 ops/s` | `123014.98 ops/s` | `138676.21 ops/s` | `54000.91 ops/s` |
+| `read-all` | `488572.88 ops/s` | `4667315.23 ops/s` | `362850.07 ops/s` | `681620.83 ops/s` |
+| `read` | `591654.80 ops/s` | `5351213.52 ops/s` | `499362.11 ops/s` | `951069.33 ops/s` |
+| `write` | `337998.42 ops/s` | `1784484.07 ops/s` | `131063.38 ops/s` | `135895.93 ops/s` |
 
 ## 4. 结果说明
 
-- 在这组测试参数下，`std_map_mutex` 基线在三类 workload 中都高于当前跳表实现。
-- 带 WAL 后，两类实现都会受到追加日志与同步策略影响。
+- 在这组测试参数下，`kvstore_no_wal` 在三类 workload 中都高于 `std_map_mutex` 基线。
+- `read-all` workload 是读多写少场景，同时覆盖 `PUT`、`GET`、`DELETE` 和 `SCAN` 四类存储操作。
+- `read-all` 和 `read` workload 中写操作占比较低，带 WAL 的跳表实现仍高于 `std_map_mutex_wal`。
+- `write` workload 中写操作占比较高，WAL 追加路径成为主要瓶颈，两类带 WAL 实现的吞吐接近。
+- 当前跳表实现支持有序索引和范围查询；无 WAL 场景主要体现内存索引并发能力，带 WAL 场景还会受到日志追加和同步策略影响。
 - 该结果主要反映当前实现的锁策略和代码路径开销，不代表端到端网络场景的全部表现。
 
 ## 5. 网络 Benchmark 说明

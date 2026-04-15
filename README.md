@@ -129,10 +129,12 @@ WAL 恢复验证：
 进程内对比 benchmark：
 
 ```bash
-./bin/kvstore_compare_bench 20000 8 100000 mixed
+./bin/kvstore_compare_bench 20000 8 100000 read-all
 ./bin/kvstore_compare_bench 20000 8 100000 read
 ./bin/kvstore_compare_bench 20000 8 100000 write
 ```
+
+其中 `read-all` 为读多写少负载，覆盖 `PUT`、`GET`、`DEL`、`SCAN` 四类存储操作。
 
 当前对比基线包括：
 
@@ -144,11 +146,20 @@ WAL 恢复验证：
 ## 文档索引
 
 - [docs/implementation_overview.md](docs/implementation_overview.md)
+  实现综述，说明项目目标、核心组件和能力边界。
 - [docs/system_architecture.md](docs/system_architecture.md)
+  系统架构说明，描述接入层、网络调度层、存储持久化层和验证层的关系。
 - [docs/request_flow.md](docs/request_flow.md)
+  请求处理流程，说明命令从 TCP 接入到协议解析、存储执行和响应返回的路径。
 - [docs/protocol_reference.md](docs/protocol_reference.md)
+  文本协议参考，定义 `PING`、`PUT`、`GET`、`DEL`、`SCAN`、`QUIT` 的请求和响应格式。
 - [docs/cli_reference.md](docs/cli_reference.md)
+  CLI 参考，列出服务端、客户端、benchmark 和验证脚本的命令格式。
 - [docs/validation_workflow.md](docs/validation_workflow.md)
+  验证工作流，给出构建、测试、协议回归、WAL 恢复验证和 benchmark 的推荐顺序。
 - [docs/wal_recovery_validation.md](docs/wal_recovery_validation.md)
+  WAL 恢复验证说明，描述恢复验证脚本的目标、步骤和成功条件。
 - [docs/benchmark_methodology.md](docs/benchmark_methodology.md)
+  Benchmark 方法说明，解释网络 benchmark、进程内 benchmark、workload 和结果解读方式。
 - [docs/benchmark_summary.md](docs/benchmark_summary.md)
+  Benchmark 结果汇总，记录代表性进程内对比数据和当前结论。

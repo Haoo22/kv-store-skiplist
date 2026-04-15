@@ -20,7 +20,7 @@ Environment overrides:
   OPS_PER_THREAD benchmark operations per thread (default 500)
   MAX_THREADS    maximum thread count in sweep (default 8)
   PRELOAD_KEYS   keys inserted before benchmark starts (default 0)
-  WORKLOAD       mixed | read | write (default mixed)
+  WORKLOAD       mixed | read | read-all | write (default mixed)
   OUTPUT_FILE    optional file path for tee output
 EOF
     exit 0

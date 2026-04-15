@@ -40,7 +40,6 @@ public:
 
     bool Put(const Key& key, const Value& value) {
         std::shared_lock<std::shared_timed_mutex> lifecycle_lock(lifecycle_mutex_);
-        std::unique_lock<std::shared_timed_mutex> range_lock(range_mutex_);
 
         while (true) {
             std::vector<Node*> predecessors(max_level_, nullptr);
@@ -96,7 +95,6 @@ public:
 
     bool Get(const Key& key, Value* value) const {
         std::shared_lock<std::shared_timed_mutex> lifecycle_lock(lifecycle_mutex_);
-        std::shared_lock<std::shared_timed_mutex> range_lock(range_mutex_);
 
         Node* candidate = FindNodeNoLock(key);
         if (candidate == nullptr) {
@@ -121,7 +119,6 @@ public:
 
     bool Delete(const Key& key) {
         std::shared_lock<std::shared_timed_mutex> lifecycle_lock(lifecycle_mutex_);
-        std::unique_lock<std::shared_timed_mutex> range_lock(range_mutex_);
 
         while (true) {
             std::vector<Node*> predecessors(max_level_, nullptr);
@@ -160,7 +157,8 @@ public:
             }
 
             size_.fetch_sub(1, std::memory_order_relaxed);
-            ReclaimNode(victim);
+            // Keep unlinked nodes owned until Clear/destruction so lock-free readers never
+            // dereference reclaimed memory while traversing older forward pointers.
             RecomputeCurrentLevel();
             return true;
         }
@@ -168,7 +166,6 @@ public:
 
     std::vector<value_type> Scan(const Key& start, const Key& end) const {
         std::shared_lock<std::shared_timed_mutex> lifecycle_lock(lifecycle_mutex_);
-        std::shared_lock<std::shared_timed_mutex> range_lock(range_mutex_);
         std::vector<value_type> result;
 
         if (compare_(end, start)) {
@@ -212,7 +209,6 @@ public:
 
     void Clear() {
         std::unique_lock<std::shared_timed_mutex> lifecycle_lock(lifecycle_mutex_);
-        std::unique_lock<std::shared_timed_mutex> range_lock(range_mutex_);
         for (std::size_t level = 0; level < max_level_; ++level) {
             head_->forward[level].store(nullptr, std::memory_order_release);
         }
@@ -390,25 +386,11 @@ private:
         current_level_.store(level, std::memory_order_release);
     }
 
-    void ReclaimNode(Node* victim) {
-        std::lock_guard<std::mutex> ownership_lock(ownership_mutex_);
-        const auto iterator = std::find_if(
-            owned_nodes_.begin(),
-            owned_nodes_.end(),
-            [victim](const std::unique_ptr<Node>& node) {
-                return node.get() == victim;
-            });
-        if (iterator != owned_nodes_.end()) {
-            owned_nodes_.erase(iterator);
-        }
-    }
-
     const std::size_t max_level_;
     const double probability_;
     Compare compare_;
 
     mutable std::shared_timed_mutex lifecycle_mutex_;
-    mutable std::shared_timed_mutex range_mutex_;
     mutable std::mutex ownership_mutex_;
     std::unique_ptr<Node> head_;
     std::vector<std::unique_ptr<Node>> owned_nodes_;

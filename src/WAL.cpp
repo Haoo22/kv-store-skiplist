@@ -190,13 +190,20 @@ public:
             ComputeChecksum(record),
         };
 
-        WriteAll(fd_.Get(), &header, sizeof(header));
+        thread_local std::vector<char> buffer;
+        buffer.resize(sizeof(header) + record.key.size() + record.value.size());
+        char* cursor = buffer.data();
+        std::memcpy(cursor, &header, sizeof(header));
+        cursor += sizeof(header);
         if (!record.key.empty()) {
-            WriteAll(fd_.Get(), record.key.data(), record.key.size());
+            std::memcpy(cursor, record.key.data(), record.key.size());
+            cursor += record.key.size();
         }
         if (!record.value.empty()) {
-            WriteAll(fd_.Get(), record.value.data(), record.value.size());
+            std::memcpy(cursor, record.value.data(), record.value.size());
         }
+
+        WriteAll(fd_.Get(), buffer.data(), buffer.size());
     }
 
     ReplayStats Replay(const std::string& file_path,
@@ -297,14 +304,18 @@ WAL::~WAL() {
 }
 
 void WAL::AppendPut(const std::string& key, const std::string& value) {
-    std::lock_guard<std::mutex> lock(append_mutex_);
-    impl_->Append(LogRecord {RecordType::kPut, key, value});
+    {
+        std::lock_guard<std::mutex> lock(append_mutex_);
+        impl_->Append(LogRecord {RecordType::kPut, key, value});
+    }
     MarkDirty();
 }
 
 void WAL::AppendDelete(const std::string& key) {
-    std::lock_guard<std::mutex> lock(append_mutex_);
-    impl_->Append(LogRecord {RecordType::kDelete, key, ""});
+    {
+        std::lock_guard<std::mutex> lock(append_mutex_);
+        impl_->Append(LogRecord {RecordType::kDelete, key, ""});
+    }
     MarkDirty();
 }
 
@@ -374,7 +385,6 @@ void WAL::SyncLoop() {
         }
 
         if (should_sync) {
-            std::lock_guard<std::mutex> lock(append_mutex_);
             impl_->Sync();
         }
 

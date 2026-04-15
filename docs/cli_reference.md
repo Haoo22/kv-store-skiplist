@@ -4,6 +4,8 @@
 
 ## 1. `kvstore_server`
 
+`kvstore_server` 是系统的服务端入口。启动后会监听 TCP 端口，接收客户端发送的文本协议命令，并调用内部 KVStore 完成读写操作。
+
 命令：
 
 ```bash
@@ -20,6 +22,8 @@
   每次写入都同步刷盘。
 
 ## 2. `kvstore_client`
+
+`kvstore_client` 是交互式客户端，适合手工输入命令检查服务端是否正常工作。它不是唯一接入方式，任何能建立 TCP 连接并发送文本协议的程序都可以访问服务端。
 
 命令：
 
@@ -38,6 +42,8 @@
 - 做交互式冒烟验证
 
 ## 3. `kvstore_bench`
+
+`kvstore_bench` 用于端到端测试服务端吞吐。它会真实经过 TCP、协议解析、Reactor 调度和存储执行，因此结果反映完整服务路径的表现。
 
 命令：
 
@@ -70,18 +76,23 @@
 
 ## 4. `kvstore_compare_bench`
 
+`kvstore_compare_bench` 不经过网络层，只在进程内比较不同存储实现。它适合观察跳表、`std::map + mutex` 和 WAL 包装本身的相对开销。
+
 命令：
 
 ```bash
-./bin/kvstore_compare_bench [ops_per_thread] [max_threads] [preload_keys] [mixed|read|write]
+./bin/kvstore_compare_bench [ops_per_thread] [max_threads] [preload_keys] [mixed|read|read-all|write]
 ```
 
 用途：
 
 - 对比跳表实现与 `std::map + mutex` 基线
 - 对比带 WAL 与不带 WAL 的性能差异
+- 使用 `read-all` 观察覆盖 `PUT`、`GET`、`DELETE`、`SCAN` 的读多写少负载
 
 ## 5. `verify_protocol_regression.sh`
+
+该脚本用于验证文本协议主链路，适合在修改协议解析、服务端读写或命令处理后运行。
 
 命令：
 
@@ -104,6 +115,8 @@
 
 ## 6. `verify_wal_recovery.sh`
 
+该脚本用于验证 WAL 恢复链路，适合在修改 WAL、KVStore 写路径或服务端启动流程后运行。
+
 命令：
 
 ```bash
@@ -119,6 +132,8 @@
 
 ## 7. `run_network_bench.sh`
 
+该脚本会自动编译、启动服务端并运行网络 benchmark，适合批量观察无 WAL、同步 WAL 和周期 WAL 的端到端表现。
+
 命令：
 
 ```bash
@@ -132,6 +147,8 @@
 - 运行单客户端与多客户端网络 benchmark
 
 ## 8. `run_compare_bench.sh`
+
+该脚本是 `kvstore_compare_bench` 的批量入口，可以通过环境变量调整线程数、预加载数据量和 workload。
 
 命令：
 
