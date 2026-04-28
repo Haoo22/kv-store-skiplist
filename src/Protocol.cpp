@@ -39,6 +39,7 @@ std::vector<std::string> LineCodec::ExtractLines() {
     std::vector<std::string> lines;
     std::string::size_type pos = 0;
 
+    // 逐条提取完整 CRLF 行，残留半包继续留在缓冲区等待后续数据。
     while ((pos = buffer_.find("\r\n")) != std::string::npos) {
         lines.emplace_back(buffer_.substr(0, pos));
         buffer_.erase(0, pos + 2);
@@ -60,6 +61,7 @@ std::string CommandProcessor::Execute(const std::string& line) const {
         return "ERROR empty command\r\n";
     }
 
+    // 命令字统一按大小写不敏感处理，参数仍保留原样。
     const std::string::size_type command_end = FindTokenEnd(trimmed, 0);
     const std::string command = ToUpper(trimmed.substr(0, command_end));
     const std::string::size_type args_begin = SkipSpaces(trimmed, command_end);
@@ -119,6 +121,7 @@ std::string CommandProcessor::Execute(const std::string& line) const {
         const std::string start = trimmed.substr(args_begin, start_end - args_begin);
         const std::string end = trimmed.substr(end_begin, end_end - end_begin);
         const auto pairs = store_.Scan(start, end);
+        // 返回格式为 RESULT <count> k1=v1 k2=v2 ...
         std::string output = "RESULT " + std::to_string(pairs.size());
         for (const auto& pair : pairs) {
             output.push_back(' ');
@@ -149,6 +152,7 @@ std::string CommandProcessor::Execute(const std::string& line) const {
         }
 
         const std::string key = trimmed.substr(args_begin, key_end - args_begin);
+        // value 允许包含空格，因此直接取余下整段文本。
         const std::string value = trimmed.substr(value_begin);
         if (key.empty() || value.empty()) {
             return "ERROR usage: PUT <key> <value>\r\n";

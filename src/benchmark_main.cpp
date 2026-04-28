@@ -125,6 +125,7 @@ public:
                 throw std::runtime_error("server closed connection");
             }
 
+            // 基准工具同样按 CRLF 读取单条响应，和交互客户端保持一致。
             buffer_.append(chunk, static_cast<std::size_t>(bytes));
         }
     }
@@ -259,11 +260,13 @@ int main(int argc, char** argv) {
 
                     for (int offset = 0; offset < batch_size; ++offset) {
                         const int current = index + offset;
+                        // 先把一个批次的请求串起来发送，模拟 pipeline。
                         batch.append(build_request(current));
                     }
 
                     WriteAll(socket.get(), batch);
                     for (int offset = 0; offset < batch_size; ++offset) {
+                        // 再按顺序消费对应响应，既测吞吐也校验协议正确性。
                         const std::string response = reader.ReadLine(socket.get());
                         validate_response(response);
                     }

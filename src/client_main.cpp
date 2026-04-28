@@ -120,6 +120,7 @@ public:
                 throw std::runtime_error("server closed connection");
             }
 
+            // 服务端响应同样按 CRLF 分隔，这里复用简单缓冲读取整行。
             buffer_.append(chunk, static_cast<std::size_t>(bytes));
         }
     }
@@ -180,6 +181,7 @@ int main(int argc, char** argv) {
                 continue;
             }
 
+            // 客户端逐条发送命令并同步等待对应响应，便于手工调试协议。
             WriteAll(socket.get(), line + "\r\n");
             const std::string response = reader.ReadLine(socket.get());
             std::cout << response;

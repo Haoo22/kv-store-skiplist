@@ -16,6 +16,7 @@ public:
           wal(options.wal_path, options.wal_sync_interval_ms),
           wal_enabled(options.enable_wal) {
         if (wal_enabled) {
+            // 启动阶段先回放日志，再开始对外提供服务。
             wal.Replay([this](const LogRecord& record) {
                 if (record.type == RecordType::kPut) {
                     index.Put(record.key, record.value);
@@ -40,6 +41,7 @@ KVStore::~KVStore() = default;
 
 bool KVStore::Put(const std::string& key, const std::string& value) {
     if (impl_->wal_enabled) {
+        // 先记 WAL，再更新内存索引，保证恢复时能重放这次写入。
         impl_->wal.AppendPut(key, value);
     }
     return impl_->index.Put(key, value);
@@ -51,6 +53,7 @@ bool KVStore::Get(const std::string& key, std::string* value) const {
 
 bool KVStore::Delete(const std::string& key) {
     if (impl_->wal_enabled) {
+        // 删除同样先落日志，避免进程异常退出后丢失删除意图。
         impl_->wal.AppendDelete(key);
     }
     return impl_->index.Delete(key);

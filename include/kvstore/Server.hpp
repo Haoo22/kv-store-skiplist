@@ -8,6 +8,7 @@
 
 namespace kvstore {
 
+// 服务端网络参数。
 struct ServerOptions {
     std::string host {"0.0.0.0"};
     std::uint16_t port {6380};
@@ -15,6 +16,7 @@ struct ServerOptions {
     int max_events {64};
 };
 
+// 基于单线程 Reactor 模型的 TCP 服务端。
 class ReactorServer {
 public:
     ReactorServer(EngineOptions engine_options, ServerOptions server_options);

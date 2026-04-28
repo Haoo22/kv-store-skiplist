@@ -41,6 +41,7 @@ int main() {
     options.wal_path = MakeWalPath("engine_recovery.log");
     RemoveFileIfExists(options.wal_path);
 
+    // 基础功能测试：跳表、引擎增删查扫与 WAL 恢复。
     kvstore::KVStore store(options);
     Ensure(store.options().wal_path == options.wal_path, "KVStore should preserve WAL path");
 
@@ -143,6 +144,7 @@ int main() {
     }
 
     {
+        // 协议测试：同时覆盖拆包、命令执行与响应格式。
         kvstore::EngineOptions protocol_options;
         protocol_options.wal_path = MakeWalPath("protocol.log");
         RemoveFileIfExists(protocol_options.wal_path);
@@ -177,6 +179,7 @@ int main() {
     }
 
     {
+        // 并发写、读、删联合测试，验证跳表在多线程下的可见性与计数。
         kvstore::SkipList<int, std::string> concurrent_skip_list;
         std::vector<std::thread> writers;
         for (int thread_index = 0; thread_index < 4; ++thread_index) {
@@ -234,6 +237,7 @@ int main() {
     }
 
     {
+        // 写入与全量扫描并发进行，检查扫描结果始终保持有序。
         kvstore::SkipList<int, std::string> scan_stress_skip_list;
         for (int key = 0; key < 2000; ++key) {
             static_cast<void>(scan_stress_skip_list.Put(key, "seed-" + std::to_string(key)));

@@ -14,6 +14,8 @@
 
 namespace kvstore {
 
+// 支持有序读写和区间扫描的跳表实现。
+// 该版本在节点级加锁的基础上兼顾并发访问与有序遍历。
 template <typename Key, typename Value, typename Compare = std::less<Key>>
 class SkipList {
 public:

@@ -18,6 +18,7 @@
 namespace kvstore {
 namespace {
 
+// WAL 文件中的每条记录都带固定魔数，便于校验文件内容是否合法。
 constexpr std::uint32_t kRecordMagic = 0x4b56574cU;
 
 struct RecordHeader {
@@ -182,6 +183,7 @@ public:
         : fd_(OpenAppendFd(file_path)) {}
 
     void Append(const LogRecord& record) {
+        // header + key + value 顺序写入，保持追加式日志结构。
         const RecordHeader header {
             kRecordMagic,
             static_cast<std::uint8_t>(record.type),
@@ -215,6 +217,7 @@ public:
             RecordHeader header {};
             std::size_t header_bytes = 0;
             if (!ReadAll(reader.Get(), &header, sizeof(header), &header_bytes)) {
+                // 文件尾部如果不是完整 header，视为异常中断留下的残缺尾巴。
                 stats.skipped_tail_bytes += header_bytes;
                 break;
             }
@@ -236,6 +239,7 @@ public:
             std::size_t payload_bytes = 0;
             if (!record.key.empty()) {
                 if (!ReadAll(reader.Get(), &record.key[0], record.key.size(), &payload_bytes)) {
+                    // key 或 value 读不完整时，同样把残缺尾部统计后停止回放。
                     stats.skipped_tail_bytes += sizeof(header) + payload_bytes;
                     break;
                 }
@@ -294,6 +298,7 @@ WAL::WAL(std::string file_path, int sync_interval_ms)
     : file_path_(std::move(file_path)),
       sync_interval_ms_(sync_interval_ms < 0 ? 0 : sync_interval_ms),
       impl_(new Impl(file_path_)) {
+    // sync_interval_ms > 0 时启用后台定时刷盘线程。
     StartSyncThread();
 }
 
@@ -308,6 +313,7 @@ void WAL::AppendPut(const std::string& key, const std::string& value) {
         std::lock_guard<std::mutex> lock(append_mutex_);
         impl_->Append(LogRecord {RecordType::kPut, key, value});
     }
+    // 0 表示每次写操作都同步刷盘；否则仅标记 dirty，交给后台线程处理。
     MarkDirty();
 }
 
@@ -385,6 +391,7 @@ void WAL::SyncLoop() {
         }
 
         if (should_sync) {
+            // 刷盘放到互斥锁外执行，避免阻塞后续 dirty 标记。
             impl_->Sync();
         }
 

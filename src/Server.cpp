@@ -27,6 +27,7 @@ namespace {
 volatile std::sig_atomic_t g_should_stop = 0;
 
 void HandleSignal(int) {
+    // 使用信号安全的简单标志，在事件循环中优雅退出。
     g_should_stop = 1;
 }
 
@@ -142,6 +143,7 @@ public:
 
     void Run() {
         while (!g_should_stop) {
+            // 定时醒来检查退出标志，避免永久阻塞在 epoll_wait 上。
             const int ready = ::epoll_wait(
                 epoll_fd_.Get(),
                 events_.data(),
@@ -173,6 +175,7 @@ private:
 
         FileDescriptor fd;
         LineCodec codec;
+        // 非阻塞写场景下，未发完的数据暂存在这里，等待 EPOLLOUT 继续发送。
         std::string write_buffer;
         std::uint32_t interest_events {EPOLLIN | EPOLLRDHUP};
         bool close_after_write {false};
@@ -276,6 +279,7 @@ private:
             return;
         }
 
+        // 对端关闭、挂起或出错时直接回收连接状态。
         if ((event.events & (EPOLLERR | EPOLLHUP | EPOLLRDHUP)) != 0U) {
             CloseConnection(iterator);
             return;
@@ -318,8 +322,10 @@ private:
             iterator->second.codec.Append(buffer, static_cast<std::size_t>(bytes));
             const std::vector<std::string> lines = iterator->second.codec.ExtractLines();
             for (const std::string& line : lines) {
+                // 连接级别按“完整一行命令”驱动协议处理。
                 const std::string response = processor_.Execute(line);
                 if (FirstCommandTokenUpper(line) == "QUIT") {
+                    // QUIT 仍需把 BYE 回给客户端，然后再关闭连接。
                     iterator->second.close_after_write = true;
                 }
                 iterator->second.write_buffer.append(response);
@@ -339,6 +345,7 @@ private:
                                           iterator->second.write_buffer.size());
             if (bytes < 0) {
                 if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                    // 内核发送缓冲区已满，等待下一次可写事件继续发送。
                     SetConnectionInterest(iterator, EPOLLIN | EPOLLOUT | EPOLLRDHUP);
                     return true;
                 }
@@ -374,6 +381,7 @@ private:
     void CloseConnection(std::unordered_map<int, Connection>::iterator iterator) {
         const int fd = iterator->second.fd.Get();
         ::epoll_ctl(epoll_fd_.Get(), EPOLL_CTL_DEL, fd, nullptr);
+        // 擦除 map 项时，Connection 内的 FileDescriptor 会自动关闭 socket。
         connections_.erase(iterator);
     }
 

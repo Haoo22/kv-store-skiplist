@@ -94,6 +94,7 @@ class WalBackedStore {
 public:
     WalBackedStore(std::string wal_path, int wal_sync_interval_ms = 10)
         : wal_(std::move(wal_path), wal_sync_interval_ms) {
+        // 为了和 KVStore 的恢复语义保持一致，基线实现也支持 WAL 回放。
         wal_.Replay([this](const kvstore::LogRecord& record) {
             if (record.type == kvstore::RecordType::kPut) {
                 static_cast<void>(store_.Put(record.key, record.value));
@@ -215,6 +216,7 @@ BenchmarkResult RunBenchmark(const std::string& name,
                 const std::string payload = "value-" + std::to_string(operation);
 
                 if (workload_mode == WorkloadMode::kReadHeavyAll) {
+                    // read-all 场景覆盖 GET/SCAN/PUT/DELETE，更贴近完整接口负载。
                     switch (operation % 20) {
                     case 0:
                     case 1:

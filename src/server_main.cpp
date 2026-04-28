@@ -31,6 +31,7 @@ int ParseNonNegativeInt(const char* text, const char* field_name) {
 int main(int argc, char** argv) {
     kvstore::EngineOptions engine_options;
     kvstore::ServerOptions server_options;
+    // 服务端默认采用周期性刷盘，兼顾恢复能力与写入吞吐。
     engine_options.wal_sync_interval_ms = 10;
 
     for (int index = 1; index < argc; ++index) {
