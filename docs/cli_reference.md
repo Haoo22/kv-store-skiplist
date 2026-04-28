@@ -40,6 +40,7 @@
 
 - 手工发送协议命令
 - 做交互式冒烟验证
+- 手动发送 `CHECKPOINT` 触发快照与 WAL 截断
 
 ## 3. `kvstore_bench`
 

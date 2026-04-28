@@ -137,6 +137,18 @@ std::string CommandProcessor::Execute(const std::string& line) const {
         return args_begin == trimmed.size() ? "BYE\r\n" : "ERROR usage: QUIT\r\n";
     }
 
+    if (command == "CHECKPOINT") {
+        if (args_begin != trimmed.size()) {
+            return "ERROR usage: CHECKPOINT\r\n";
+        }
+        try {
+            return store_.Checkpoint() ? "OK CHECKPOINT\r\n"
+                                       : "ERROR checkpoint unavailable\r\n";
+        } catch (const std::exception&) {
+            return "ERROR checkpoint failed\r\n";
+        }
+    }
+
     if (command == "PUT") {
         if (args_begin == trimmed.size()) {
             return "ERROR usage: PUT <key> <value>\r\n";

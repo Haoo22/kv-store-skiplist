@@ -36,6 +36,9 @@ public:
     std::vector<std::pair<std::string, std::string>> Scan(
         const std::string& start,
         const std::string& end) const;
+    // 将当前内存状态落成快照，并重置 WAL。
+    // 当 WAL 未启用时返回 false。
+    bool Checkpoint();
 
     const EngineOptions& options() const noexcept;
 

@@ -48,6 +48,7 @@
 - `GET <key>`
 - `DEL <key>`
 - `SCAN <start> <end>`
+- `CHECKPOINT`
 - `QUIT`
 
 ## 4. 存储执行
@@ -76,7 +77,9 @@
 说明：
 
 - `PUT` 和 `DEL` 在更新内存前先追加 WAL
+- `CHECKPOINT` 会把当前跳表内容写入快照文件，并重置 WAL
 - 重启时通过 replay 重建内存状态
+- 如果存在快照文件，恢复时会先加载快照，再回放 checkpoint 之后的新 WAL
 - 不完整的尾部记录会被跳过
 
 ## 6. 响应返回
@@ -90,4 +93,5 @@
 - `NOT_FOUND`
 - `RESULT ...`
 - `OK DELETE`
+- `OK CHECKPOINT`
 - `BYE`

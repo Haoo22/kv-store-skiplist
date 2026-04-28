@@ -270,6 +270,11 @@ public:
         }
     }
 
+    void Reset(const std::string& file_path) {
+        Sync();
+        fd_.Reset(OpenTruncateFd(file_path));
+    }
+
 private:
     static int OpenAppendFd(const std::string& file_path) {
         EnsureDirectory(ParentDirectory(file_path));
@@ -287,6 +292,15 @@ private:
                 return ::open("/dev/null", O_RDONLY);
             }
             throw MakeErrno("open WAL for replay failed");
+        }
+        return fd;
+    }
+
+    static int OpenTruncateFd(const std::string& file_path) {
+        EnsureDirectory(ParentDirectory(file_path));
+        const int fd = ::open(file_path.c_str(), O_CREAT | O_TRUNC | O_APPEND | O_WRONLY, 0644);
+        if (fd < 0) {
+            throw MakeErrno("truncate WAL failed");
         }
         return fd;
     }
@@ -330,7 +344,15 @@ ReplayStats WAL::Replay(const std::function<void(const LogRecord&)>& apply) cons
 }
 
 void WAL::Sync() {
+    std::lock_guard<std::mutex> lock(append_mutex_);
     impl_->Sync();
+}
+
+void WAL::Reset() {
+    std::lock_guard<std::mutex> append_lock(append_mutex_);
+    impl_->Reset(file_path_);
+    std::lock_guard<std::mutex> sync_lock(sync_mutex_);
+    dirty_ = false;
 }
 
 const std::string& WAL::path() const noexcept {
@@ -392,6 +414,7 @@ void WAL::SyncLoop() {
 
         if (should_sync) {
             // 刷盘放到互斥锁外执行，避免阻塞后续 dirty 标记。
+            std::lock_guard<std::mutex> append_lock(append_mutex_);
             impl_->Sync();
         }
 

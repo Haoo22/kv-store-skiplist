@@ -51,6 +51,8 @@ public:
     ReplayStats Replay(const std::function<void(const LogRecord&)>& apply) const;
     // 主动刷盘，确保已写入数据同步到磁盘。
     void Sync();
+    // 截断并重建 WAL 文件，通常在 checkpoint 成功后调用。
+    void Reset();
 
     const std::string& path() const noexcept;
 

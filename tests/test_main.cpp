@@ -30,6 +30,10 @@ std::string MakeWalPath(const std::string& name) {
     return directory + "/" + name;
 }
 
+std::string SnapshotPathFromWalPath(const std::string& wal_path) {
+    return wal_path + ".snapshot";
+}
+
 void RemoveFileIfExists(const std::string& path) {
     ::unlink(path.c_str());
 }
@@ -40,6 +44,7 @@ int main() {
     kvstore::EngineOptions options;
     options.wal_path = MakeWalPath("engine_recovery.log");
     RemoveFileIfExists(options.wal_path);
+    RemoveFileIfExists(SnapshotPathFromWalPath(options.wal_path));
 
     // 基础功能测试：跳表、引擎增删查扫与 WAL 恢复。
     kvstore::KVStore store(options);
@@ -98,16 +103,34 @@ int main() {
     Ensure(ordered_range[1].second == "3", "engine second range value");
 
     {
+        Ensure(store.Checkpoint(), "checkpoint should succeed when WAL is enabled");
+        const std::string snapshot_path = SnapshotPathFromWalPath(options.wal_path);
+        struct stat snapshot_stat {};
+        Ensure(::stat(snapshot_path.c_str(), &snapshot_stat) == 0,
+               "checkpoint should create snapshot file");
+        struct stat wal_stat {};
+        Ensure(::stat(options.wal_path.c_str(), &wal_stat) == 0, "checkpoint should keep WAL file");
+        Ensure(wal_stat.st_size == 0, "checkpoint should truncate WAL contents");
+
+        Ensure(store.Put("gamma", "4"), "engine insert gamma after checkpoint");
+        Ensure(store.Delete("aardvark"), "engine delete aardvark after checkpoint");
+    }
+
+    {
         kvstore::KVStore recovered_store(options);
         const auto recovered_range = recovered_store.Scan("a", "z");
         Ensure(recovered_range.size() == 2, "recovered range size");
-        Ensure(recovered_range[0].first == "aardvark", "recovered range key 0");
-        Ensure(recovered_range[0].second == "0", "recovered range value 0");
+        Ensure(recovered_range[0].first == "alpha", "recovered range key 0");
+        Ensure(recovered_range[0].second == "3", "recovered range value 0");
         Ensure(recovered_store.Get("alpha", &engine_value), "replay should recover alpha");
         Ensure(engine_value == "3", "recovered alpha value");
         Ensure(!recovered_store.Get("beta", &engine_value), "replay should preserve delete");
-        Ensure(recovered_range[1].first == "alpha", "recovered range key 1");
-        Ensure(recovered_range[1].second == "3", "recovered range value 1");
+        Ensure(!recovered_store.Get("aardvark", &engine_value),
+               "checkpoint + wal should preserve later delete");
+        Ensure(recovered_store.Get("gamma", &engine_value), "replay should recover gamma");
+        Ensure(engine_value == "4", "recovered gamma value");
+        Ensure(recovered_range[1].first == "gamma", "recovered range key 1");
+        Ensure(recovered_range[1].second == "4", "recovered range value 1");
     }
 
     const std::string wal_path = MakeWalPath("truncated_replay.log");
@@ -171,11 +194,14 @@ int main() {
         Ensure(processor.Execute(second_lines[2]) == "OK DELETE\r\n", "protocol DEL response");
         Ensure(processor.Execute(second_lines[3]) == "BYE\r\n", "protocol QUIT response");
         Ensure(processor.Execute("PING") == "PONG\r\n", "protocol PING response");
+        Ensure(processor.Execute("CHECKPOINT") == "OK CHECKPOINT\r\n",
+               "protocol CHECKPOINT response");
         Ensure(processor.Execute("GET missing") == "NOT_FOUND\r\n", "protocol missing GET");
         Ensure(processor.Execute("NOOP") == "ERROR unknown command\r\n",
                "protocol unknown command");
 
         RemoveFileIfExists(protocol_options.wal_path);
+        RemoveFileIfExists(SnapshotPathFromWalPath(protocol_options.wal_path));
     }
 
     {

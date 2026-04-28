@@ -166,6 +166,34 @@ BYE\r\n
 ERROR usage: QUIT\r\n
 ```
 
+### 3.7 `CHECKPOINT`
+
+请求：
+
+```text
+CHECKPOINT\r\n
+```
+
+成功响应：
+
+```text
+OK CHECKPOINT\r\n
+```
+
+错误响应：
+
+```text
+ERROR usage: CHECKPOINT\r\n
+ERROR checkpoint unavailable\r\n
+ERROR checkpoint failed\r\n
+```
+
+说明：
+
+- 该命令会把当前内存数据写成快照文件
+- 快照成功后会截断当前 WAL 文件
+- 当服务端以 `--no-wal` 运行时，返回 `ERROR checkpoint unavailable\r\n`
+
 ## 4. TCP 粘包与半包
 
 服务端使用 `LineCodec` 缓冲连接上的字节流，只有在检测到完整 `\r\n` 结尾后才会交给命令处理器，因此能够正确处理常见的 TCP 粘包与半包。

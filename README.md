@@ -7,8 +7,8 @@
 - 单线程 `epoll` Reactor 服务端
 - 非阻塞 TCP Socket
 - 跳表索引，支持 `PUT`、`GET`、`DEL`、`SCAN`
-- WAL 追加写与重启恢复
-- 文本协议：`PING`、`PUT`、`GET`、`DEL`、`SCAN`、`QUIT`
+- WAL 追加写、手动 `CHECKPOINT` 与重启恢复
+- 文本协议：`PING`、`PUT`、`GET`、`DEL`、`SCAN`、`CHECKPOINT`、`QUIT`
 - 端到端网络 benchmark
 - 进程内基线对比 benchmark
 
@@ -78,6 +78,7 @@ PUT user alice
 GET user
 SCAN a z
 DEL user
+CHECKPOINT
 QUIT
 ```
 
@@ -94,6 +95,14 @@ QUIT
 
 - `./bin/kvstore_server --wal-sync-ms 0`
   每次写入都同步刷盘。
+
+当 WAL 长时间增长后，可以通过客户端发送：
+
+```text
+CHECKPOINT
+```
+
+服务端会把当前内存状态写入 `data/wal.log.snapshot`，并将 `data/wal.log` 截断为新的空日志文件。
 
 ## 测试与验证
 

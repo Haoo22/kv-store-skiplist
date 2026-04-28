@@ -200,6 +200,27 @@ public:
         return result;
     }
 
+    std::vector<value_type> Snapshot() const {
+        std::shared_lock<std::shared_timed_mutex> lifecycle_lock(lifecycle_mutex_);
+        std::vector<value_type> result;
+        result.reserve(size_.load(std::memory_order_acquire));
+
+        Node* current = head_->forward[0].load(std::memory_order_acquire);
+        while (current != nullptr) {
+            if (!current->marked.load(std::memory_order_acquire) &&
+                current->fully_linked.load(std::memory_order_acquire)) {
+                std::lock_guard<std::mutex> node_lock(current->mutex);
+                if (!current->marked.load(std::memory_order_acquire) &&
+                    current->fully_linked.load(std::memory_order_acquire)) {
+                    result.emplace_back(current->key, current->value);
+                }
+            }
+            current = current->forward[0].load(std::memory_order_acquire);
+        }
+
+        return result;
+    }
+
     std::size_t Size() const noexcept {
         std::shared_lock<std::shared_timed_mutex> lifecycle_lock(lifecycle_mutex_);
         return size_.load(std::memory_order_acquire);
