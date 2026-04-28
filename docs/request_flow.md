@@ -7,7 +7,7 @@
 ```text
 客户端发送命令
 -> 服务端读取 socket
--> LineCodec 按 \r\n 提取完整行
+-> RequestCodec 解析 RESP-like 请求
 -> CommandProcessor 解析命令
 -> KVStore 执行读写
 -> 写操作先写 WAL
@@ -37,8 +37,8 @@
 
 说明：
 
-- `LineCodec` 负责按 `\r\n` 切分完整命令
-- 半包内容会保留在连接缓冲区中
+- `RequestCodec` 负责按 RESP-like 长度前缀解析完整请求
+- 半包内容会保留在连接缓冲区中，直到数组头和所有 bulk string 均接收完整
 - `CommandProcessor` 负责参数解析与命令分发
 
 支持命令：

@@ -1,23 +1,29 @@
-# KV-Store 文本协议参考
+# KV-Store RESP-like 协议参考
 
-本文档定义服务端当前支持的文本协议。
+本文档定义服务端当前支持的 RESP-like 长度前缀协议。
 
 ## 1. 传输格式
 
 - 传输层为 TCP
-- 每条命令以 `\r\n` 结尾
+- 请求使用 RESP-like 数组编码
+- 每个 bulk string 长度与内容之间使用 `\r\n` 分隔
 - 命令字大小写不敏感
-- 参数按空白分隔
-- 服务端会裁剪命令两端空白
+- 参数按数组元素传递，不再依赖空白切分
 
 ## 2. 通用规则
 
-- key 不能包含空白字符
-- `PUT` 的 value 为 key 之后的剩余文本
-- value 中间可以包含空格
-- value 首尾空白不会保留
-- 空命令返回 `ERROR empty command`
+- key 建议使用不含空白与控制字符的可打印字符串
+- value 作为独立 bulk string 传递，可以包含空格
+- 空请求返回 `ERROR empty command`
 - 未识别命令返回 `ERROR unknown command`
+
+基础示例：
+
+```text
+*1\r\n
+$4\r\n
+PING\r\n
+```
 
 ## 3. 命令定义
 
@@ -26,6 +32,8 @@
 请求：
 
 ```text
+*1\r\n
+$4\r\n
 PING\r\n
 ```
 
@@ -46,8 +54,21 @@ ERROR usage: PING\r\n
 请求：
 
 ```text
-PUT user alice\r\n
-PUT title hello world\r\n
+*3\r\n
+$3\r\n
+PUT\r\n
+$4\r\n
+user\r\n
+$5\r\n
+alice\r\n
+
+*3\r\n
+$3\r\n
+PUT\r\n
+$5\r\n
+title\r\n
+$11\r\n
+hello world\r\n
 ```
 
 成功响应：
@@ -67,13 +88,18 @@ ERROR usage: PUT <key> <value>\r\n
 
 - 新插入返回 `OK PUT`
 - 覆盖已有 key 返回 `OK UPDATE`
+- value 通过长度前缀传递，可以安全包含空格
 
 ### 3.3 `GET <key>`
 
 请求：
 
 ```text
-GET user\r\n
+*2\r\n
+$3\r\n
+GET\r\n
+$4\r\n
+user\r\n
 ```
 
 成功响应：
@@ -99,7 +125,11 @@ ERROR usage: GET <key>\r\n
 请求：
 
 ```text
-DEL user\r\n
+*2\r\n
+$3\r\n
+DEL\r\n
+$4\r\n
+user\r\n
 ```
 
 成功响应：
@@ -125,7 +155,13 @@ ERROR usage: DEL <key>\r\n
 请求：
 
 ```text
-SCAN a z\r\n
+*3\r\n
+$4\r\n
+SCAN\r\n
+$1\r\n
+a\r\n
+$1\r\n
+z\r\n
 ```
 
 成功响应：
@@ -151,6 +187,8 @@ ERROR usage: SCAN <start> <end>\r\n
 请求：
 
 ```text
+*1\r\n
+$4\r\n
 QUIT\r\n
 ```
 
@@ -171,6 +209,8 @@ ERROR usage: QUIT\r\n
 请求：
 
 ```text
+*1\r\n
+$10\r\n
 CHECKPOINT\r\n
 ```
 
@@ -196,4 +236,4 @@ ERROR checkpoint failed\r\n
 
 ## 4. TCP 粘包与半包
 
-服务端使用 `LineCodec` 缓冲连接上的字节流，只有在检测到完整 `\r\n` 结尾后才会交给命令处理器，因此能够正确处理常见的 TCP 粘包与半包。
+服务端使用 `RequestCodec` 缓冲连接上的字节流，只有在检测到完整数组头及全部 bulk string 内容后才会交给命令处理器，因此能够正确处理常见的 TCP 粘包与半包。

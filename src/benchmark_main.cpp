@@ -9,6 +9,7 @@
 #include <stdexcept>
 #include <string>
 #include <thread>
+#include <utility>
 #include <vector>
 
 #include <arpa/inet.h>
@@ -137,6 +138,18 @@ private:
 bool StartsWith(const std::string& text, const std::string& prefix) {
     return text.size() >= prefix.size() &&
            text.compare(0, prefix.size(), prefix) == 0;
+}
+
+std::string EncodeResp(const std::vector<std::string>& tokens) {
+    std::string output = "*" + std::to_string(tokens.size()) + "\r\n";
+    for (const std::string& token : tokens) {
+        output.append("$");
+        output.append(std::to_string(token.size()));
+        output.append("\r\n");
+        output.append(token);
+        output.append("\r\n");
+    }
+    return output;
 }
 
 enum class Scenario {
@@ -313,7 +326,7 @@ int main(int argc, char** argv) {
             if (options.scenario == Scenario::kFullProtocol) {
                 run_phase("PING",
                           [](int) {
-                              return std::string("PING\r\n");
+                              return EncodeResp({"PING"});
                           },
                           [&](const std::string& response) {
                               expect_prefix("PING", "PONG\r\n", response);
@@ -322,7 +335,7 @@ int main(int argc, char** argv) {
 
             run_phase("PUT",
                       [&](int index) {
-                          return "PUT " + make_key(index) + " " + make_value(index) + "\r\n";
+                          return EncodeResp({"PUT", make_key(index), make_value(index)});
                       },
                       [&](const std::string& response) {
                           if (!StartsWith(response, "OK PUT\r\n") &&
@@ -333,7 +346,7 @@ int main(int argc, char** argv) {
 
             run_phase("GET",
                       [&](int index) {
-                          return "GET " + make_key(index) + "\r\n";
+                          return EncodeResp({"GET", make_key(index)});
                       },
                       [&](const std::string& response) {
                           expect_prefix("GET", "VALUE ", response);
@@ -342,7 +355,7 @@ int main(int argc, char** argv) {
             if (options.scenario == Scenario::kFullProtocol) {
                 run_phase("SCAN",
                           [&](int) {
-                              return "SCAN " + key_prefix + "0 " + key_prefix + "zzzzzzzz\r\n";
+                              return EncodeResp({"SCAN", key_prefix + "0", key_prefix + "zzzzzzzz"});
                           },
                           [&](const std::string& response) {
                               expect_prefix("SCAN", "RESULT ", response);
@@ -350,14 +363,14 @@ int main(int argc, char** argv) {
 
                 run_phase("DEL",
                           [&](int index) {
-                              return "DEL " + make_key(index) + "\r\n";
+                              return EncodeResp({"DEL", make_key(index)});
                           },
                           [&](const std::string& response) {
                               expect_prefix("DEL", "OK DELETE\r\n", response);
                           });
             }
 
-            WriteAll(socket.get(), "QUIT\r\n");
+            WriteAll(socket.get(), EncodeResp({"QUIT"}));
             const std::string quit_response = reader.ReadLine(socket.get());
             if (!StartsWith(quit_response, "BYE\r\n")) {
                 throw std::runtime_error("unexpected QUIT response: " + quit_response);

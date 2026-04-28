@@ -102,24 +102,8 @@ void UpdateInterest(int epoll_fd, int fd, std::uint32_t events) {
     }
 }
 
-std::string Trim(const std::string& text) {
-    const auto is_space = [](unsigned char ch) {
-        return std::isspace(ch) != 0;
-    };
-
-    const auto begin = std::find_if_not(text.begin(), text.end(), is_space);
-    if (begin == text.end()) {
-        return "";
-    }
-
-    const auto end = std::find_if_not(text.rbegin(), text.rend(), is_space).base();
-    return std::string(begin, end);
-}
-
 std::string FirstCommandTokenUpper(const std::string& line) {
-    const std::string trimmed = Trim(line);
-    const std::string::size_type pos = trimmed.find(' ');
-    std::string token = pos == std::string::npos ? trimmed : trimmed.substr(0, pos);
+    std::string token = line;
     std::transform(token.begin(), token.end(), token.begin(), [](unsigned char ch) {
         return static_cast<char>(std::toupper(ch));
     });
@@ -174,7 +158,7 @@ private:
             : fd(socket_fd) {}
 
         FileDescriptor fd;
-        LineCodec codec;
+        RequestCodec codec;
         // 非阻塞写场景下，未发完的数据暂存在这里，等待 EPOLLOUT 继续发送。
         std::string write_buffer;
         std::uint32_t interest_events {EPOLLIN | EPOLLRDHUP};
@@ -320,11 +304,19 @@ private:
             }
 
             iterator->second.codec.Append(buffer, static_cast<std::size_t>(bytes));
-            const std::vector<std::string> lines = iterator->second.codec.ExtractLines();
-            for (const std::string& line : lines) {
-                // 连接级别按“完整一行命令”驱动协议处理。
-                const std::string response = processor_.Execute(line);
-                if (FirstCommandTokenUpper(line) == "QUIT") {
+            std::vector<DecodedRequest> requests;
+            try {
+                requests = iterator->second.codec.ExtractRequests();
+            } catch (const std::exception&) {
+                CloseConnection(iterator);
+                return false;
+            }
+            for (const DecodedRequest& request : requests) {
+                // 连接级别按“完整一条协议请求”驱动命令处理。
+                const std::string response = processor_.Execute(request.tokens);
+                const bool is_quit = !request.tokens.empty() &&
+                                     FirstCommandTokenUpper(request.tokens.front()) == "QUIT";
+                if (is_quit) {
                     // QUIT 仍需把 BYE 回给客户端，然后再关闭连接。
                     iterator->second.close_after_write = true;
                 }

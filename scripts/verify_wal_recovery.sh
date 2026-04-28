@@ -42,7 +42,7 @@ start_server() {
 
 send_commands() {
     local commands="$1"
-    printf "%b" "$commands" | "$CLIENT_BIN" "$HOST" "$PORT"
+    printf "%b.\n" "$commands" | "$CLIENT_BIN" --raw-resp "$HOST" "$PORT"
 }
 
 trap cleanup EXIT
@@ -53,11 +53,15 @@ mkdir -p "$DATA_DIR"
 cmake --build "$BUILD_DIR" -j
 
 start_server
-send_commands "PUT ${TEST_KEY} ${TEST_VALUE}\nQUIT\n" >/tmp/kvstore_wal_recovery_put.out
+send_commands "*3\r\n\$3\r\nPUT\r\n\$${#TEST_KEY}\r\n${TEST_KEY}\r\n\$${#TEST_VALUE}\r\n${TEST_VALUE}\r\n" \
+    >/tmp/kvstore_wal_recovery_put.out
+send_commands "*1\r\n\$4\r\nQUIT\r\n" >/tmp/kvstore_wal_recovery_quit_put.out
 cleanup
 
 start_server
-GET_OUTPUT="$(send_commands "GET ${TEST_KEY}\nQUIT\n" 2>/tmp/kvstore_wal_recovery_get.err)"
+GET_OUTPUT="$(send_commands "*2\r\n\$3\r\nGET\r\n\$${#TEST_KEY}\r\n${TEST_KEY}\r\n" \
+    2>/tmp/kvstore_wal_recovery_get.err)"
+send_commands "*1\r\n\$4\r\nQUIT\r\n" >/tmp/kvstore_wal_recovery_quit_get.out
 
 if [[ "$GET_OUTPUT" != *"VALUE ${TEST_VALUE}"* ]]; then
     echo "WAL recovery verification failed"

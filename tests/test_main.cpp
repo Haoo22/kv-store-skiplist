@@ -167,38 +167,43 @@ int main() {
     }
 
     {
-        // 协议测试：同时覆盖拆包、命令执行与响应格式。
+        // 协议测试：覆盖本地命令解析、RESP 拆包、命令执行与响应格式。
         kvstore::EngineOptions protocol_options;
         protocol_options.wal_path = MakeWalPath("protocol.log");
         RemoveFileIfExists(protocol_options.wal_path);
         kvstore::KVStore protocol_store(protocol_options);
         kvstore::CommandProcessor processor(protocol_store);
-        kvstore::LineCodec codec;
+        kvstore::RequestCodec codec;
 
-        static const char kChunk1[] = "PUT user alice\r\nGET ";
-        codec.Append(kChunk1, sizeof(kChunk1) - 1);
-        const auto first_lines = codec.ExtractLines();
-        Ensure(first_lines.size() == 1, "codec should extract one complete line");
-        Ensure(first_lines[0] == "PUT user alice", "codec first line content");
-        Ensure(codec.buffer() == "GET ", "codec should retain partial command");
-
-        static const char kChunk2[] = "user\r\nSCAN a z\r\nDEL user\r\nQUIT\r\n";
-        codec.Append(kChunk2, sizeof(kChunk2) - 1);
-        const auto second_lines = codec.ExtractLines();
-        Ensure(second_lines.size() == 4, "codec should extract remaining lines");
-
-        Ensure(processor.Execute(first_lines[0]) == "OK PUT\r\n", "protocol PUT response");
-        Ensure(processor.Execute(second_lines[0]) == "VALUE alice\r\n", "protocol GET response");
-        Ensure(processor.Execute(second_lines[1]) == "RESULT 1 user=alice\r\n",
+        Ensure(processor.Execute("PUT user alice") == "OK PUT\r\n", "local PUT response");
+        Ensure(processor.Execute("GET user") == "VALUE alice\r\n", "local GET response");
+        Ensure(processor.Execute("SCAN a z") == "RESULT 1 user=alice\r\n",
                "protocol SCAN response");
-        Ensure(processor.Execute(second_lines[2]) == "OK DELETE\r\n", "protocol DEL response");
-        Ensure(processor.Execute(second_lines[3]) == "BYE\r\n", "protocol QUIT response");
-        Ensure(processor.Execute("PING") == "PONG\r\n", "protocol PING response");
+        Ensure(processor.Execute("DEL user") == "OK DELETE\r\n", "local DEL response");
+        Ensure(processor.Execute("QUIT") == "BYE\r\n", "local QUIT response");
+        Ensure(processor.Execute("PING") == "PONG\r\n", "local PING response");
         Ensure(processor.Execute("CHECKPOINT") == "OK CHECKPOINT\r\n",
-               "protocol CHECKPOINT response");
+               "local CHECKPOINT response");
         Ensure(processor.Execute("GET missing") == "NOT_FOUND\r\n", "protocol missing GET");
         Ensure(processor.Execute("NOOP") == "ERROR unknown command\r\n",
                "protocol unknown command");
+
+        static const char kRespChunk1[] = "*3\r\n$3\r\nPUT\r\n$4\r\nresp\r\n$11\r\nhello";
+        codec.Append(kRespChunk1, sizeof(kRespChunk1) - 1);
+        Ensure(codec.ExtractRequests().empty(), "RESP half packet should wait for full payload");
+        static const char kRespChunk2[] = " world\r\n*2\r\n$3\r\nGET\r\n$4\r\nresp\r\n";
+        codec.Append(kRespChunk2, sizeof(kRespChunk2) - 1);
+        const auto resp_requests = codec.ExtractRequests();
+        Ensure(resp_requests.size() == 2, "codec should extract two RESP requests");
+        Ensure(resp_requests[0].tokens.size() == 3, "RESP PUT token count");
+        Ensure(resp_requests[0].tokens[2] == "hello world", "RESP should preserve spaces in value");
+        Ensure(processor.Execute(resp_requests[0].tokens) == "OK PUT\r\n", "RESP PUT response");
+        Ensure(processor.Execute(resp_requests[1].tokens) == "VALUE hello world\r\n",
+               "RESP GET response");
+
+        const std::vector<std::string> resp_checkpoint {"CHECKPOINT"};
+        Ensure(processor.Execute(resp_checkpoint) == "OK CHECKPOINT\r\n",
+               "RESP CHECKPOINT response");
 
         RemoveFileIfExists(protocol_options.wal_path);
         RemoveFileIfExists(SnapshotPathFromWalPath(protocol_options.wal_path));

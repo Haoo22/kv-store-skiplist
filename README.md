@@ -1,6 +1,6 @@
 # KV-Store
 
-基于 C++14 实现的轻量级键值存储系统，采用单线程 Reactor 网络模型、跳表内存索引和 WAL 持久化日志，提供简单的文本协议与配套测试、恢复验证和 benchmark 工具。
+基于 C++14 实现的轻量级键值存储系统，采用单线程 Reactor 网络模型、跳表内存索引和 WAL 持久化日志，提供 RESP-like 长度前缀协议与配套测试、恢复验证和 benchmark 工具。
 
 ## 功能概览
 
@@ -8,7 +8,7 @@
 - 非阻塞 TCP Socket
 - 跳表索引，支持 `PUT`、`GET`、`DEL`、`SCAN`
 - WAL 追加写、手动 `CHECKPOINT` 与重启恢复
-- 文本协议：`PING`、`PUT`、`GET`、`DEL`、`SCAN`、`CHECKPOINT`、`QUIT`
+- RESP-like 长度前缀协议：`PING`、`PUT`、`GET`、`DEL`、`SCAN`、`CHECKPOINT`、`QUIT`
 - 端到端网络 benchmark
 - 进程内基线对比 benchmark
 
@@ -70,7 +70,13 @@ cmake --build build -j
 ./bin/kvstore_client 127.0.0.1 6380
 ```
 
-示例命令：
+发送原始 RESP 报文：
+
+```bash
+./bin/kvstore_client --raw-resp 127.0.0.1 6380
+```
+
+客户端交互示例命令：
 
 ```text
 PING
@@ -103,6 +109,20 @@ CHECKPOINT
 ```
 
 服务端会把当前内存状态写入 `data/wal.log.snapshot`，并将 `data/wal.log` 截断为新的空日志文件。
+
+RESP-like 请求示例：
+
+```text
+*3
+$3
+PUT
+$4
+user
+$11
+hello world
+```
+
+其中 `$11` 表示后续参数长度为 11 字节，因此 value 可以安全包含空格。
 
 ## 测试与验证
 
@@ -161,7 +181,7 @@ WAL 恢复验证：
 - [docs/request_flow.md](docs/request_flow.md)
   请求处理流程，说明命令从 TCP 接入到协议解析、存储执行和响应返回的路径。
 - [docs/protocol_reference.md](docs/protocol_reference.md)
-  文本协议参考，定义 `PING`、`PUT`、`GET`、`DEL`、`SCAN`、`QUIT` 的请求和响应格式。
+  RESP-like 协议参考，定义 `PING`、`PUT`、`GET`、`DEL`、`SCAN`、`QUIT` 的请求和响应格式。
 - [docs/cli_reference.md](docs/cli_reference.md)
   CLI 参考，列出服务端、客户端、benchmark 和验证脚本的命令格式。
 - [docs/validation_workflow.md](docs/validation_workflow.md)

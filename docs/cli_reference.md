@@ -4,7 +4,7 @@
 
 ## 1. `kvstore_server`
 
-`kvstore_server` 是系统的服务端入口。启动后会监听 TCP 端口，接收客户端发送的文本协议命令，并调用内部 KVStore 完成读写操作。
+`kvstore_server` 是系统的服务端入口。启动后会监听 TCP 端口，接收客户端发送的 RESP-like 协议命令，并调用内部 KVStore 完成读写操作。
 
 命令：
 
@@ -23,12 +23,13 @@
 
 ## 2. `kvstore_client`
 
-`kvstore_client` 是交互式客户端，适合手工输入命令检查服务端是否正常工作。它不是唯一接入方式，任何能建立 TCP 连接并发送文本协议的程序都可以访问服务端。
+`kvstore_client` 是交互式客户端，适合手工输入命令检查服务端是否正常工作。它不是唯一接入方式，任何能建立 TCP 连接并发送 RESP-like 协议的程序都可以访问服务端。
 
 命令：
 
 ```bash
 ./bin/kvstore_client [host] [port]
+./bin/kvstore_client --raw-resp [host] [port]
 ```
 
 默认值：
@@ -38,9 +39,10 @@
 
 用途：
 
-- 手工发送协议命令
+- 手工输入命令，由客户端自动转码为 RESP-like 请求
 - 做交互式冒烟验证
 - 手动发送 `CHECKPOINT` 触发快照与 WAL 截断
+- 在 `--raw-resp` 模式下直接转发显式 RESP 测试报文
 
 ## 3. `kvstore_bench`
 
@@ -93,7 +95,7 @@
 
 ## 5. `verify_protocol_regression.sh`
 
-该脚本用于验证文本协议主链路，适合在修改协议解析、服务端读写或命令处理后运行。
+该脚本用于验证 RESP-like 协议主链路，适合在修改协议解析、服务端读写或命令处理后运行。
 
 命令：
 

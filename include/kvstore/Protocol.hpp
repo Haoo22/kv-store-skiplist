@@ -2,20 +2,27 @@
 
 #include "kvstore/kvstore.hpp"
 
+#include <cstddef>
 #include <string>
 #include <vector>
 
 namespace kvstore {
 
-// 面向连接的行协议编解码器。
-// 负责累积网络分片，并按 CRLF 提取完整命令。
-class LineCodec {
+struct DecodedRequest {
+    std::vector<std::string> tokens;
+};
+
+// 面向连接的协议编解码器。
+// 仅支持 RESP-like 长度前缀请求。
+class RequestCodec {
 public:
     void Append(const char* data, std::size_t size);
-    std::vector<std::string> ExtractLines();
+    std::vector<DecodedRequest> ExtractRequests();
     const std::string& buffer() const noexcept;
 
 private:
+    static bool TryExtractResp(std::string* buffer, DecodedRequest* request);
+
     std::string buffer_;
 };
 
@@ -25,8 +32,11 @@ public:
     explicit CommandProcessor(KVStore& store);
 
     std::string Execute(const std::string& line) const;
+    std::string Execute(const std::vector<std::string>& tokens) const;
 
 private:
+    std::string ExecuteCommand(const std::string& command,
+                               const std::vector<std::string>& args) const;
     static std::string Trim(const std::string& text);
 
     KVStore& store_;

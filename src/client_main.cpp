@@ -3,8 +3,10 @@
 #include <cstring>
 #include <iostream>
 #include <limits>
+#include <sstream>
 #include <stdexcept>
 #include <string>
+#include <vector>
 
 #include <arpa/inet.h>
 #include <netinet/in.h>
@@ -129,8 +131,61 @@ private:
     std::string buffer_;
 };
 
+std::string Trim(const std::string& text) {
+    const std::string::size_type begin = text.find_first_not_of(" \t\r\n");
+    if (begin == std::string::npos) {
+        return "";
+    }
+    const std::string::size_type end = text.find_last_not_of(" \t\r\n");
+    return text.substr(begin, end - begin + 1);
+}
+
+std::vector<std::string> ParseInteractiveCommand(const std::string& line) {
+    const std::string trimmed = Trim(line);
+    if (trimmed.empty()) {
+        return {};
+    }
+
+    std::istringstream stream(trimmed);
+    std::string command;
+    stream >> command;
+
+    if (command == "PUT" || command == "put" || command == "Put") {
+        std::string key;
+        stream >> key;
+        std::string value;
+        std::getline(stream, value);
+        const std::string trimmed_value = Trim(value);
+        if (key.empty() || trimmed_value.empty()) {
+            throw std::invalid_argument("PUT requires key and value");
+        }
+        return {command, key, trimmed_value};
+    }
+
+    std::vector<std::string> tokens;
+    tokens.push_back(command);
+    std::string token;
+    while (stream >> token) {
+        tokens.push_back(token);
+    }
+    return tokens;
+}
+
+std::string EncodeResp(const std::vector<std::string>& tokens) {
+    std::string output = "*" + std::to_string(tokens.size()) + "\r\n";
+    for (const std::string& token : tokens) {
+        output.append("$");
+        output.append(std::to_string(token.size()));
+        output.append("\r\n");
+        output.append(token);
+        output.append("\r\n");
+    }
+    return output;
+}
+
 void PrintUsage() {
-    std::cerr << "Usage: ./bin/kvstore_client [host] [port]\n"
+    std::cerr << "Usage: ./bin/kvstore_client [--raw-resp] [host] [port]\n"
+                 "  --raw-resp: read RESP-like frames from stdin and forward them as-is\n"
                  "  host: server IPv4 address (default 127.0.0.1)\n"
                  "  port: server port (default 6380)\n";
 }
@@ -159,10 +214,16 @@ int main(int argc, char** argv) {
 
     std::string host = "127.0.0.1";
     std::uint16_t port = 6380U;
+    bool raw_resp = false;
 
     try {
-        host = argc > 1 ? argv[1] : "127.0.0.1";
-        port = argc > 2 ? ParsePort(argv[2]) : 6380U;
+        int arg_index = 1;
+        if (argc > arg_index && std::string(argv[arg_index]) == "--raw-resp") {
+            raw_resp = true;
+            ++arg_index;
+        }
+        host = argc > arg_index ? argv[arg_index] : "127.0.0.1";
+        port = argc > arg_index + 1 ? ParsePort(argv[arg_index + 1]) : 6380U;
     } catch (const std::exception&) {
         PrintUsage();
         std::cerr << "Client error: invalid command line arguments\n";
@@ -173,19 +234,43 @@ int main(int argc, char** argv) {
         SocketHandle socket = Connect(host, port);
         LineReader reader;
         std::cout << "Connected to " << host << ':' << port << '\n';
-        std::cout << "Type commands like PING, PUT key value, GET key, SCAN a z, DEL key, QUIT\n";
+        if (raw_resp) {
+            std::cout << "Streaming RESP frames from stdin\n";
+        } else {
+            std::cout << "Type commands like PING, PUT key value, GET key, SCAN a z, DEL key, CHECKPOINT, QUIT\n";
+        }
 
         std::string line;
+        std::string raw_buffer;
         while (std::cout << "> " && std::getline(std::cin, line)) {
             if (line.empty()) {
                 continue;
             }
 
-            // 客户端逐条发送命令并同步等待对应响应，便于手工调试协议。
-            WriteAll(socket.get(), line + "\r\n");
+            std::vector<std::string> tokens;
+            if (raw_resp) {
+                raw_buffer.append(line);
+                raw_buffer.append("\n");
+                if (line == ".") {
+                    raw_buffer.erase(raw_buffer.size() - 2);
+                    WriteAll(socket.get(), raw_buffer);
+                    raw_buffer.clear();
+                } else {
+                    continue;
+                }
+            } else {
+                tokens = ParseInteractiveCommand(line);
+                if (tokens.empty()) {
+                    continue;
+                }
+
+                // 客户端对交互命令做本地分词，再编码成 RESP-like 请求。
+                WriteAll(socket.get(), EncodeResp(tokens));
+            }
             const std::string response = reader.ReadLine(socket.get());
             std::cout << response;
-            if (line == "QUIT" || line == "quit" || line == "Quit") {
+            if (!raw_resp &&
+                (tokens.front() == "QUIT" || tokens.front() == "quit" || tokens.front() == "Quit")) {
                 break;
             }
         }
